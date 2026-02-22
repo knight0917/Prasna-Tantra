@@ -1,0 +1,21 @@
+# Virtual Environment
+venv/
+env/
+.env
+
+# Python Bytecodes
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large Astronomical Ephemeris Files (DO NOT COMMIT)
+*.bsp
+de421.bsp
+
+# IDE / OS specific configs
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
