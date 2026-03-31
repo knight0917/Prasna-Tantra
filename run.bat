@@ -1,27 +1,94 @@
 @echo off
-echo =========================================
-echo       AstroTrack Physics Engine          
-echo =========================================
+setlocal enabledelayedexpansion
+
+:: Force UTF-8 encoding for specialized TUI characters
+SET PYTHONIOENCODING=utf-8
+
+echo.
+echo  =====================================================
+echo    AstroTrack Python  ^|  Vedic Computation Engine
+echo  =====================================================
 echo.
 
-:: Check if virtual environment exists
-IF NOT EXIST "venv\Scripts\activate.bat" (
-    echo [INFO] Virtual environment not found. Creating one now...
-    python -m venv venv
+:: ── 1. Python version guard (requires 3.10+) ──────────────────────────────
+python --version >nul 2>&1
+IF ERRORLEVEL 1 (
+    echo [ERROR] Python not found. Install Python 3.10+ and add it to PATH.
+    pause & exit /b 1
 )
 
-:: Activate the environment
+FOR /F "tokens=2 delims= " %%V IN ('python --version 2^>^&1') DO SET PY_VER=%%V
+FOR /F "tokens=1,2 delims=." %%A IN ("%PY_VER%") DO (
+    SET PY_MAJOR=%%A
+    SET PY_MINOR=%%B
+)
+IF %PY_MAJOR% LSS 3 (
+    echo [ERROR] Python 3.10+ required. Found: %PY_VER%
+    pause & exit /b 1
+)
+IF %PY_MAJOR% EQU 3 IF %PY_MINOR% LSS 10 (
+    echo [ERROR] Python 3.10+ required. Found: %PY_VER%
+    pause & exit /b 1
+)
+echo [OK] Python %PY_VER% detected.
+
+:: ── 2. Virtual environment ─────────────────────────────────────────────────
+IF NOT EXIST "venv\Scripts\activate.bat" (
+    echo [INFO] Creating virtual environment...
+    python -m venv venv
+    IF ERRORLEVEL 1 (
+        echo [ERROR] Failed to create virtual environment.
+        pause & exit /b 1
+    )
+)
 call venv\Scripts\activate.bat
+echo [OK] Virtual environment active.
 
-:: Silently ensure dependencies are satisfied
-echo [INFO] Verifying physics dependencies...
-pip install -q skyfield pydantic geopy timezonefinder pytz
+:: ── 3. Install / sync dependencies from requirements.txt ──────────────────
+echo [INFO] Syncing dependencies from requirements.txt...
+pip install -q -r requirements.txt streamlit geopy timezonefinder pytz
+IF ERRORLEVEL 1 (
+    echo [ERROR] Dependency installation failed. Check requirements.txt.
+    pause & exit /b 1
+)
+echo [OK] Dependencies satisfied.
 
-echo [INFO] Executing Core Engine Benchmark...
+:: ── 4. First-run ephemeris notice ─────────────────────────────────────────
+IF NOT EXIST "de421.bsp" (
+    echo.
+    echo [INFO] First run: downloading NASA JPL DE421 ephemeris ^(~17 MB^).
+    echo        This happens once. Subsequent runs will use the cached file.
+    echo.
+)
+
+:: ── 5. Mode Selection ─────────────────────────────────────────────────────
+:: If user passes --ui, launch Streamlit. Otherwise launch standard CLI.
+
+SET IS_UI=0
+for %%x in (%*) do (
+   if "%%x"=="--ui" set IS_UI=1
+)
+
+if %IS_UI%==1 (
+    echo [INFO] Starting Prasna Tantra Dashboard (Streamlit)...
+    echo.
+    streamlit run app.py
+) else (
+    echo [INFO] Starting AstroTrack engine...
+    echo  ───────────────────────────────────────────────────
+    echo.
+    python -m src.main %*
+)
+
+IF ERRORLEVEL 1 (
+    echo.
+    echo [ERROR] Application exited with an error.
+    pause & exit /b 1
+)
+
+:: ── 6. Done ───────────────────────────────────────────────────────────────
 echo.
-python -m src.main
-
-echo.
-echo =========================================
-echo [SUCCESS] Execution Complete.
+echo  =====================================================
+echo  [SUCCESS] Session complete.
+echo  =====================================================
 pause

@@ -2,20 +2,34 @@
 venv/
 env/
 .env
+.venv/
 
-# Python Bytecodes
+# Python Bytecodes & Cache
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.mypy_cache/
 
 # Large Astronomical Ephemeris Files (DO NOT COMMIT)
 *.bsp
 de421.bsp
 
+# Build and Packaging
+build/
+dist/
+*.egg-info/
+
+# Tests & Temporary Runtime Output
+output.json
+output_utf8.json
+houses_result.json
+test_output.txt
+*.log
+
 # IDE / OS specific configs
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
 
-# Logs
-*.log
