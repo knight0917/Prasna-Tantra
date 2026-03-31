@@ -11,7 +11,18 @@ BSP_URL = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de421.
 
 if not os.path.exists(BSP_PATH):
     with st.spinner("Downloading ephemeris data (one time only)..."):
-        urllib.request.urlretrieve(BSP_URL, BSP_PATH)
+        try:
+            import requests
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            resp = requests.get(BSP_URL, headers=headers, stream=True)
+            resp.raise_for_status()
+            with open(BSP_PATH, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        except Exception as e:
+            st.error(f"Failed to download ephemeris data: {e}")
+            st.info("Manual setup: Download de421.bsp from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de421.bsp and place it in the root folder.")
+            st.stop()
 
 # 1. Page Configuration
 st.set_page_config(
