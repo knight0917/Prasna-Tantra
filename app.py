@@ -7,7 +7,7 @@ from src.query_engine import run_prasna_query, run_prasna_query_from_coords
 from src.question_parser import parse_question
 
 BSP_PATH = "de421.bsp"
-BSP_URL = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de421.bsp"
+BSP_URL = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de421.bsp"
 
 if not os.path.exists(BSP_PATH):
     with st.spinner("Downloading ephemeris data (one time only)..."):
