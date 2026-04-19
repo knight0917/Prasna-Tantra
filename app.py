@@ -60,6 +60,14 @@ def run_query(form_data: dict) -> None:
 
     with st.spinner("Reading your question..."):
         parsed = parse_question(user_question)
+        if parsed.get("needs_clarification"):
+            st.session_state["parsed_question"] = parsed
+            st.session_state.last_result = None
+            st.error(
+                "This question is too general for Prasna Tantra. Ask one clear matter such as "
+                "'Will I get the job?', 'Will I marry?', or 'Will I recover from illness?'"
+            )
+            return
         final_topic = parsed["query_topic"]
         final_house = parsed["query_house"]
         st.session_state["parsed_question"] = parsed

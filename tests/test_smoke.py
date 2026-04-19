@@ -27,6 +27,12 @@ class SmokeTests(unittest.TestCase):
         parsed = parse_question("Will I get married soon?")
         self.assertEqual(parsed["query_topic"], "marriage")
         self.assertEqual(parsed["query_house"], 7)
+        self.assertFalse(parsed.get("needs_clarification", False))
+
+    def test_question_parser_flags_vague_question_for_clarification(self):
+        parsed = parse_question("what now")
+        self.assertTrue(parsed.get("needs_clarification"))
+        self.assertEqual(parsed["confidence"], "low")
 
     def test_process_astro_request_returns_core_sections(self):
         result = process_astro_request(PAYLOAD, query_house=7)

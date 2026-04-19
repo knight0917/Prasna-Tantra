@@ -209,6 +209,22 @@ def _perfection_label(judg: dict) -> str:
     return "None"
 
 
+def _headline_answer(judg: dict) -> str:
+    for text in (judg.get("specific_verdict", ""), judg.get("interpretation", "")):
+        upper = text.upper()
+        if upper.startswith("YES, WITH EFFORT"):
+            return "YES, WITH EFFORT"
+        if upper.startswith("YES"):
+            return "YES"
+        if upper.startswith("NO"):
+            return "NO"
+        if upper.startswith("UNCLEAR"):
+            return "UNCLEAR"
+        if upper.startswith("CRITICAL"):
+            return "CRITICAL"
+    return "UNCLEAR"
+
+
 def section_header(title: str) -> None:
     st.markdown(
         f"""
@@ -331,7 +347,7 @@ def render_sincerity_gate(sinc: dict) -> None:
     label_map = {
         "confirmed": ("SINCERE INTENT CONFIRMED", "#4A7C59"),
         "caution": ("MIXED SIGNALS - Proceed carefully", "#C9A84C"),
-        "neutral": ("NEUTRAL CHART - Proceeding", "#C9A84C"),
+        "neutral": ("NEUTRAL CHART - Proceed with caution", "#C9A84C"),
     }
     label, color = label_map.get(verdict, label_map["neutral"])
     st.markdown(
@@ -354,24 +370,19 @@ def render_sincerity_gate(sinc: dict) -> None:
 
 
 def render_parsed_question_box(parsed: dict) -> None:
-    confidence_color = "#4A7C59" if parsed["confidence"] == "high" else "#C9A84C" if parsed["confidence"] == "medium" else "#8B3A3A"
     reasoning_intro = parsed.get("reasoning", "").split("(")[0].strip()
     st.markdown(
         f"""
         <div style='border:1px solid rgba(201,168,76,0.2); border-left:3px solid #C9A84C;
              background:rgba(201,168,76,0.04); padding:1.2rem 1.5rem; margin:1rem 0;'>
             <div style='font-family:Cinzel,serif; font-size:0.55rem; letter-spacing:0.25em;
-                 color:rgba(201,168,76,0.6); margin-bottom:0.5rem;'>QUESTION INTERPRETED</div>
+                 color:rgba(201,168,76,0.6); margin-bottom:0.5rem;'>QUESTION</div>
             <div style='font-family:Crimson Text,serif; font-size:1.05rem; color:#E8DFC8;'>
-                <b>Your question:</b> "{parsed.get('rephrased', '')}"
+                "{parsed.get('rephrased', '')}"
             </div>
             <div style='font-family:Crimson Text,serif; font-size:1.05rem; color:#E8DFC8; margin-top:0.3rem;'>
-                <b>Mapped to:</b> House {parsed.get('query_house', '?')} -
+                <b>House concerned:</b> House {parsed.get('query_house', '?')} -
                 <span style='color:#C9A84C;'>{reasoning_intro}</span>
-            </div>
-            <div style='font-family:Cinzel,serif; font-size:0.55rem; letter-spacing:0.15em;
-                 color:{confidence_color}; margin-top:0.5rem;'>
-                Confidence: {parsed.get('confidence', 'unknown').upper()}
             </div>
         </div>
         """,
@@ -381,7 +392,6 @@ def render_parsed_question_box(parsed: dict) -> None:
 
 def render_answer_block(res: dict) -> None:
     judg = res.get("house_judgment", {})
-    perf = res.get("performance", {})
     positions = res.get("positions", {})
     tim = res.get("timing_estimate", {})
     lagna_lord_name = judg.get("lagna_lord", "Unknown")
@@ -389,16 +399,10 @@ def render_answer_block(res: dict) -> None:
     karyesh_name = judg.get("karyesh", "Unknown")
     karyesh = positions.get(karyesh_name)
     perfection = _perfection_label(judg)
+    headline = _headline_answer(judg)
 
     st.markdown("<hr style='border: none; border-top: 1px solid rgba(201,168,76,0.2); margin: 1.5rem 0;'>", unsafe_allow_html=True)
-    section_header("The Answer")
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.metric("Success Chance", f"{judg.get('karyasiddhi_percent', 0)}%")
-    with m2:
-        st.metric("House Vitality", judg.get("house_vitality", "Unknown"))
-    with m3:
-        st.metric("Perfection", perfection)
+    section_header("Judgment")
 
     specific_verdict = judg.get("specific_verdict", "")
     specific_factors = judg.get("specific_factors", [])
@@ -406,11 +410,16 @@ def render_answer_block(res: dict) -> None:
     interpretation = judg.get("interpretation", "Consult a scholar.")
     primary_timing = tim.get("most_likely", {})
 
-    content_html = f"<b>Core judgment:</b> {interpretation}"
+    content_html = f"""
+    <div style='font-family:Cinzel,serif; font-size:1.8rem; letter-spacing:0.18em; color:#C9A84C; margin-bottom:0.8rem;'>
+        {headline}
+    </div>
+    <div><b>Judgment:</b> {interpretation}</div>
+    """
     if specific_verdict and "General house judgment" not in specific_verdict:
-        content_html += f"<br><br><b>Topic-specific reading:</b> {specific_verdict}"
+        content_html += f"<br><br><b>House judgment:</b> {specific_verdict}"
     elif specific_verdict:
-        content_html += f"<br><br><b>Topic-specific reading:</b> {specific_verdict}"
+        content_html += f"<br><br><b>House judgment:</b> {specific_verdict}"
 
     st.markdown(
         f"""
@@ -427,29 +436,29 @@ def render_answer_block(res: dict) -> None:
     <div style='border:1px solid rgba(201,168,76,0.18); background:rgba(255,255,255,0.02);
          padding:1rem 1.2rem; margin:0.8rem 0 1rem 0;'>
         <div style='font-family:Cinzel,serif; font-size:0.58rem; letter-spacing:0.2em; color:#C9A84C; margin-bottom:0.7rem;'>
-            READING BASIS
+            BASIS OF JUDGMENT
         </div>
         <div><b>Lagna:</b> {judg.get('lagna_sign', 'Unknown')} | <b>Lagna lord:</b> {lagna_lord_name} in House {lagna_lord.get('house', '?') if lagna_lord else '?'}</div>
         <div><b>Moon:</b> {'Unafflicted' if judg.get('moon_unafflicted') else 'Afflicted'} | <b>Phase:</b> {judg.get('moon_phase', 'unknown').capitalize()}</div>
-        <div><b>Query house:</b> {judg.get('query_house', '?')} ({judg.get('query_house_sign', 'Unknown')}) | <b>Significator:</b> {karyesh_name} in House {karyesh.get('house', '?') if karyesh else '?'}</div>
-        <div><b>Tajaka:</b> {perfection}{' + Kamboola' if judg.get('kamboola_present') else ''}</div>
+        <div><b>House concerned:</b> {judg.get('query_house', '?')} ({judg.get('query_house_sign', 'Unknown')}) | <b>Significator:</b> {karyesh_name} in House {karyesh.get('house', '?') if karyesh else '?'}</div>
+        <div><b>Yoga:</b> {perfection}{' + Kamboola' if judg.get('kamboola_present') else ''}</div>
     </div>
     """
     st.markdown(basis_html, unsafe_allow_html=True)
 
     if specific_factors:
-        st.markdown("<h5 style='color: #E2E2E2; margin-top: 15px;'>Combinations Detected</h5>", unsafe_allow_html=True)
+        st.markdown("<h5 style='color: #E2E2E2; margin-top: 15px;'>Classical Factors</h5>", unsafe_allow_html=True)
         for factor in specific_factors:
             st.markdown(f"- <span style='color:rgba(232,223,200,0.85);'>{factor}</span>", unsafe_allow_html=True)
 
     if query_time_meaning:
         st.markdown(
-            f"<div style='font-family:Crimson Text,serif; font-style:italic; font-size:0.95rem; color:rgba(232,223,200,0.5); margin-top:0.8rem;'>{query_time_meaning}</div>",
+            f"<div style='font-family:Crimson Text,serif; font-style:italic; font-size:0.95rem; color:rgba(232,223,200,0.5); margin-top:0.8rem;'><b>Time indication:</b> {query_time_meaning}</div>",
             unsafe_allow_html=True,
         )
     if primary_timing and primary_timing.get("value") is not None and judg.get("ithasala_present"):
         st.markdown(
-            f"<div style='font-family:Crimson Text,serif; font-size:1rem; color:#E8DFC8; margin-top:0.5rem;'><b>Primary timing:</b> {primary_timing.get('value')} {primary_timing.get('unit')}</div>",
+            f"<div style='font-family:Crimson Text,serif; font-size:1rem; color:#E8DFC8; margin-top:0.5rem;'><b>Time:</b> {primary_timing.get('value')} {primary_timing.get('unit')}</div>",
             unsafe_allow_html=True,
         )
 
@@ -464,14 +473,6 @@ def render_answer_block(res: dict) -> None:
     if st.session_state["show_details"]:
         render_details_panel(res)
 
-    st.markdown(
-        f"""
-        <div style='margin-top:2rem; font-family:Cinzel,serif; font-size:0.6rem; letter-spacing:0.2em; color:rgba(201,168,76,0.3);'>
-            COMPUTED IN {perf.get('total_ms', '?')}MS | PRASNA TANTRA ENGINE
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def render_details_panel(res: dict) -> None:

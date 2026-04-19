@@ -1,5 +1,10 @@
 import re
 
+_GENERIC_VAGUE_PATTERNS = (
+    r"what now|what next|now what|tell me|anything|something|general|overall|"
+    r"what is happening|what's happening|what will happen|my life"
+)
+
 HOUSE_KEYWORDS = {
     10: ('career',   r'job|career|profession|work|office|boss|promotion|salary|business|employ|interview|recruit|infosys|company|resign|retire|transfer'),
     7:  ('marriage', r'marriage|marry|married|wife|husband|spouse|partner|relationship|wedding|bride|groom|divorce|separate|love|girlfriend|boyfriend|engagement'),
@@ -36,7 +41,8 @@ def parse_question(user_question: str) -> dict:
             'query_house': 2, 'confidence': 'low',
             'rephrased': user_question,
             'reasoning': 'Question appears to be a test or hypothetical. Sincerity check will flag this.',
-            'is_test_question': True
+            'is_test_question': True,
+            'needs_clarification': False,
         }
     
     # Remove common auxiliary verbs that are not meaningful keywords
@@ -77,8 +83,13 @@ def parse_question(user_question: str) -> dict:
     }
 
     reasoning = f'Keywords matched suggest this relates to {house_names.get(best_house, "House " + str(best_house))} (House {best_house}).'
+    needs_clarification = False
     if confidence == 'low':
         reasoning = 'No strong keywords found. Defaulted to House 2 (Wealth). A clearer question will improve the judgment.'
+        token_count = len([token for token in re.split(r"\s+", text) if token])
+        if token_count <= 3 or re.search(_GENERIC_VAGUE_PATTERNS, text):
+            needs_clarification = True
+            reasoning = 'The question is too general to assign a proper house. Ask one specific matter, such as marriage, work, illness, property, travel, or money.'
 
     return {
         'house': best_house,
@@ -88,4 +99,5 @@ def parse_question(user_question: str) -> dict:
         'confidence': confidence,
         'rephrased': rephrased,
         'reasoning': reasoning,
+        'needs_clarification': needs_clarification,
     }

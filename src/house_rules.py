@@ -626,7 +626,21 @@ def apply_house_rules(query_house: int, positions: dict, house_lords: dict, prec
     else:
         result = handler(ctx)
 
+    specific_verdict = result.specific_verdict
+    if (
+        not house_judgment.get("ithasala_present")
+        and house_judgment.get("easarapha_present")
+        and specific_verdict.startswith("YES")
+    ):
+        specific_verdict = "NO - The matter separates rather than perfects."
+    elif (
+        not house_judgment.get("ithasala_present")
+        and not house_judgment.get("easarapha_present")
+        and specific_verdict.startswith("YES")
+    ):
+        specific_verdict = "UNCLEAR - House indications are supportive, but no applying perfection completes the matter."
+
     return {
-        "specific_verdict": result.specific_verdict,
+        "specific_verdict": specific_verdict,
         "specific_factors": result.specific_factors,
     }
