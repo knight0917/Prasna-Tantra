@@ -283,6 +283,9 @@ def _analyze_tajaka(
         return {
             "ithasala_present":      True,
             "ithasala_orb_remaining": 0.0,   # same planet — no gap
+            "ithasala_aspect_type":  "Same lord",
+            "ithasala_quality":      "supportive",
+            "hostile_applying_present": False,
             "easarapha_present":     False,
             "kamboola_present":      False,
         }
@@ -290,8 +293,23 @@ def _analyze_tajaka(
     pair = frozenset({lagna_lord, karyesh})
 
     ithasala_inst = next(
-        (i for i in precomputed_yogas.get("ithasala", [])
-         if frozenset({i["faster_planet"], i["slower_planet"]}) == pair),
+        (
+            i for i in precomputed_yogas.get("ithasala", [])
+            if (
+                frozenset({i["faster_planet"], i["slower_planet"]}) == pair
+                and i.get("perfects_matter", True)
+            )
+        ),
+        None,
+    )
+    hostile_applying_inst = next(
+        (
+            i for i in precomputed_yogas.get("ithasala", [])
+            if (
+                frozenset({i["faster_planet"], i["slower_planet"]}) == pair
+                and not i.get("perfects_matter", True)
+            )
+        ),
         None,
     )
     easarapha_present = any(
@@ -306,6 +324,9 @@ def _analyze_tajaka(
     return {
         "ithasala_present":      ithasala_inst is not None,
         "ithasala_orb_remaining": ithasala_inst["orb_remaining"] if ithasala_inst else 0.0,
+        "ithasala_aspect_type":  ithasala_inst["aspect_type"] if ithasala_inst else None,
+        "ithasala_quality":      ithasala_inst["aspect_quality"] if ithasala_inst else None,
+        "hostile_applying_present": hostile_applying_inst is not None,
         "easarapha_present":     easarapha_present,
         "kamboola_present":      kamboola_present,
     }
@@ -316,6 +337,8 @@ def _analyze_tajaka(
 
 def _build_judgment(
     ithasala_present: bool,
+    ithasala_quality: str | None,
+    hostile_applying_present: bool,
     easarapha_present: bool,
     kamboola_present: bool,
     karyasiddhi: int,
@@ -323,7 +346,11 @@ def _build_judgment(
     """
     Compose the horary verdict from Prasna Tantra principles.
     """
-    if ithasala_present and karyasiddhi >= 75:
+    if hostile_applying_present and not ithasala_present:
+        text = "NO - The significators apply by hostile aspect, so obstruction prevails."
+    elif ithasala_present and ithasala_quality == "obstructed":
+        text = "YES, WITH EFFORT - The matter tends to perfection, but not without obstruction."
+    elif ithasala_present and karyasiddhi >= 75:
         text = "YES - The query is strongly supported and can be fulfilled."
     elif ithasala_present and karyasiddhi >= 50:
         text = "YES, WITH EFFORT - Fulfilment is possible, but not without obstacles."
@@ -520,6 +547,8 @@ def judge_house(
     # ── Step 6: Final judgment ────────────────────────────────────────────
     interpretation = _build_judgment(
         ithasala_present=tajaka_result["ithasala_present"],
+        ithasala_quality=tajaka_result["ithasala_quality"],
+        hostile_applying_present=tajaka_result["hostile_applying_present"],
         easarapha_present=tajaka_result["easarapha_present"],
         kamboola_present=tajaka_result["kamboola_present"],
         karyasiddhi=karyasiddhi_percent,
@@ -571,6 +600,9 @@ def judge_house(
         # Step 5 — Tajaka
         "ithasala_present":             tajaka_result["ithasala_present"],
         "ithasala_orb_remaining":       tajaka_result["ithasala_orb_remaining"],
+        "ithasala_aspect_type":         tajaka_result["ithasala_aspect_type"],
+        "ithasala_quality":             tajaka_result["ithasala_quality"],
+        "hostile_applying_present":     tajaka_result["hostile_applying_present"],
         "easarapha_present":            tajaka_result["easarapha_present"],
         "kamboola_present":             tajaka_result["kamboola_present"],
 

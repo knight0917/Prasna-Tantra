@@ -78,7 +78,7 @@ def parse_question(user_question: str) -> dict:
 
     reasoning = f'Keywords matched suggest this relates to {house_names.get(best_house, "House " + str(best_house))} (House {best_house}).'
     if confidence == 'low':
-        reasoning = 'No strong keywords found. Defaulted to House 2 (Wealth). Please use the topic selector for better accuracy.'
+        reasoning = 'No strong keywords found. Defaulted to House 2 (Wealth). A clearer question will improve the judgment.'
 
     return {
         'house': best_house,

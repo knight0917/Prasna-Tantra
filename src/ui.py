@@ -171,6 +171,44 @@ def init_session_state() -> None:
         st.session_state["show_details"] = False
 
 
+def _relevant_tajaka_items(res: dict, key: str) -> list[dict]:
+    judg = res.get("house_judgment", {})
+    yogas = res.get("yogas", {})
+    lagna_lord = judg.get("lagna_lord")
+    karyesh = judg.get("karyesh")
+    relevant_pair = {lagna_lord, karyesh}
+
+    items = yogas.get(key, [])
+    filtered: list[dict] = []
+    for item in items:
+        if key in {"ithasala", "easarapha"}:
+            pair = {item.get("faster_planet"), item.get("slower_planet")}
+            if pair == relevant_pair:
+                filtered.append(item)
+        elif key in {"naktha", "yamaya"}:
+            pair = set(item.get("planet_pair", (None, None)))
+            if pair == relevant_pair:
+                filtered.append(item)
+        elif key == "kamboola":
+            pair = set(item.get("ithasala_pair", (None, None)))
+            if pair == relevant_pair:
+                filtered.append(item)
+    return filtered
+
+
+def _perfection_label(judg: dict) -> str:
+    if judg.get("ithasala_present"):
+        quality = judg.get("ithasala_quality")
+        if quality == "obstructed":
+            return "Ithasala with Obstruction"
+        return "Ithasala"
+    if judg.get("hostile_applying_present"):
+        return "Hostile Application"
+    if judg.get("easarapha_present"):
+        return "Easarapha"
+    return "None"
+
+
 def section_header(title: str) -> None:
     st.markdown(
         f"""
@@ -350,7 +388,7 @@ def render_answer_block(res: dict) -> None:
     lagna_lord = positions.get(lagna_lord_name)
     karyesh_name = judg.get("karyesh", "Unknown")
     karyesh = positions.get(karyesh_name)
-    perfection = "Ithasala" if judg.get("ithasala_present") else "Easarapha" if judg.get("easarapha_present") else "None"
+    perfection = _perfection_label(judg)
 
     st.markdown("<hr style='border: none; border-top: 1px solid rgba(201,168,76,0.2); margin: 1.5rem 0;'>", unsafe_allow_html=True)
     section_header("The Answer")
@@ -438,7 +476,6 @@ def render_answer_block(res: dict) -> None:
 
 def render_details_panel(res: dict) -> None:
     judg = res.get("house_judgment", {})
-    yog = res.get("yogas", {})
     avas = res.get("avasthas", {})
     tim = res.get("timing_estimate", {})
     positions = res.get("positions", {})
@@ -477,19 +514,31 @@ def render_details_panel(res: dict) -> None:
 
     st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
     section_header("Tajaka Yogas")
+    shown_any = False
     for label, key in [("Applying (Ithasala)", "ithasala"), ("Separating (Easarapha)", "easarapha"), ("Translation (Nakta)", "naktha"), ("Translation (Yamaya)", "yamaya"), ("Moon Reinforcement (Kamboola)", "kamboola")]:
-        items = yog.get(key, [])
+        items = _relevant_tajaka_items(res, key)
         if items:
+            shown_any = True
             st.markdown(f"**{label}:**")
             for item in items:
                 if key in {"ithasala", "easarapha"}:
-                    st.write(f"- {item['faster_planet']} + {item['slower_planet']} ({item['exact_aspect_deg']} degrees)")
+                    detail = f"- {item['faster_planet']} + {item['slower_planet']} ({item['aspect_type']})"
+                    if key == "ithasala" and item.get("aspect_quality") == "obstructed":
+                        detail += " - perfection with obstruction"
+                    if key == "ithasala" and item.get("aspect_quality") == "adverse":
+                        detail += " - hostile application"
+                    st.write(detail)
                 elif key in {"naktha", "yamaya"}:
                     pair = item.get("planet_pair", ("?", "?"))
                     st.write(f"- {pair[0]} + {pair[1]} via {item.get('mediator', '?')}")
                 else:
                     pair = item.get("ithasala_pair", ("?", "?"))
                     st.write(f"- {pair[0]} + {pair[1]} reinforced by Moon")
+    if not shown_any:
+        st.markdown(
+            "Only yogas directly bearing on the Lagna lord and significator are shown here. "
+            "No relevant direct or transferred perfection was found."
+        )
 
     st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
     section_header("Timing Details")

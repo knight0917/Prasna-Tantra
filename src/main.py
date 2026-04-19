@@ -155,7 +155,7 @@ def process_astro_request(req_dict: dict, query_house: int = 7) -> dict:
     _ll_p     = positions.get(_ll_name)
     _kar_p    = positions.get(_kar_name)
     timing = None
-    if _ll_p is not None and _kar_p is not None:
+    if _ll_p is not None and _kar_p is not None and house_judgment.get("ithasala_present"):
         _ll_lon  = _ll_p.longitude  if hasattr(_ll_p,  'longitude')  else _ll_p['longitude']
         _kar_lon = _kar_p.longitude if hasattr(_kar_p, 'longitude')  else _kar_p['longitude']
         _ll_nak  = _ll_p.nakshatra  if hasattr(_ll_p,  'nakshatra')  else _ll_p['nakshatra']
@@ -179,6 +179,10 @@ def process_astro_request(req_dict: dict, query_house: int = 7) -> dict:
             )
         except (ValueError, KeyError) as e:
             timing = {"error": f"Could not compute timing: {e}"}
+    elif _ll_p is not None and _kar_p is not None:
+        timing = {
+            "error": "Timing withheld: no applying perfection between Lagna lord and significator."
+        }
 
 
     latency = (time.perf_counter() - start_time) * 1000.0  # ms precision

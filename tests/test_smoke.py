@@ -4,6 +4,7 @@ from src.main import process_astro_request
 from src.house_rules import RULE_HANDLERS, apply_house_rules
 from src.question_parser import parse_question
 from src.query_engine import run_prasna_query_from_coords
+from src.tajaka_yogas import detect_tajaka_yogas
 
 
 PAYLOAD = {
@@ -79,6 +80,28 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("specific_verdict", rules)
         self.assertIn("specific_factors", rules)
         self.assertIsInstance(rules["specific_factors"], list)
+
+    def test_timing_is_withheld_when_no_perfection_exists(self):
+        result = process_astro_request(PAYLOAD, query_house=7)
+        self.assertFalse(result["house_judgment"]["ithasala_present"])
+        self.assertIn("error", result["timing_estimate"])
+        self.assertIn("Timing withheld", result["timing_estimate"]["error"])
+
+    def test_tajaka_detection_ignores_nodes(self):
+        yogas = detect_tajaka_yogas(
+            [
+                {"name": "Mars", "longitude": 10.0, "speed_deg_per_day": 0.5},
+                {"name": "Venus", "longitude": 12.0, "speed_deg_per_day": 1.2},
+                {"name": "Rahu", "longitude": 11.0, "speed_deg_per_day": -0.05},
+                {"name": "Ketu", "longitude": 191.0, "speed_deg_per_day": -0.05},
+            ]
+        )
+        detected_names = set()
+        for key in ("ithasala", "easarapha", "naktha", "yamaya", "kamboola"):
+            for item in yogas[key]:
+                detected_names.update(str(item))
+        self.assertNotIn("Rahu", detected_names)
+        self.assertNotIn("Ketu", detected_names)
 
 
 if __name__ == "__main__":
