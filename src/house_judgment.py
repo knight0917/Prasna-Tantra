@@ -615,5 +615,6 @@ def judge_house(
     house_specifics = apply_house_rules(query_house, positions, house_lords, precomputed_yogas, out_dict)
     out_dict["specific_verdict"] = house_specifics["specific_verdict"]
     out_dict["specific_factors"] = house_specifics["specific_factors"]
+    out_dict["source_rules"] = house_specifics.get("source_rules", [])
 
     return out_dict

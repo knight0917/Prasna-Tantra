@@ -85,7 +85,14 @@ class SmokeTests(unittest.TestCase):
         )
         self.assertIn("specific_verdict", rules)
         self.assertIn("specific_factors", rules)
+        self.assertIn("source_rules", rules)
         self.assertIsInstance(rules["specific_factors"], list)
+        self.assertIsInstance(rules["source_rules"], list)
+
+    def test_house_judgment_carries_source_rules(self):
+        result = process_astro_request(PAYLOAD, query_house=7)
+        self.assertIn("source_rules", result["house_judgment"])
+        self.assertIsInstance(result["house_judgment"]["source_rules"], list)
 
     def test_timing_is_withheld_when_no_perfection_exists(self):
         result = process_astro_request(PAYLOAD, query_house=7)

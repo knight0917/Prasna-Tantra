@@ -1,11 +1,16 @@
 """
-src/house_rules.py
-Registry-based house-specific operational rules derived from Prasna Tantra.
+Registry-based house rules grounded in the working notes from Prasna Tantra.
+
+Priority is given to:
+- the relevant house and its lord
+- Lagna lord and Moon
+- applying perfection, separation, and Moon reinforcement
+- benefic/malefic support or affliction to the house concerned
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 NATURAL_BENEFICS = {"Jupiter", "Venus", "Mercury", "Moon"}
 NATURAL_MALEFICS = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
@@ -49,6 +54,7 @@ def _get(obj, field, default=None):
 class RuleResult:
     specific_verdict: str
     specific_factors: list[str]
+    source_rules: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -66,16 +72,18 @@ class RuleContext:
     def house_lord(self, house_num: int) -> str | None:
         return self.house_lords.get(str(house_num))
 
-    def planet(self, planet_name: str):
+    def planet(self, planet_name: str | None):
+        if not planet_name:
+            return None
         return self.positions.get(planet_name)
 
-    def planet_house(self, planet_name: str) -> int:
+    def planet_house(self, planet_name: str | None) -> int:
         return int(_get(self.planet(planet_name), "house", -1))
 
-    def planet_sign(self, planet_name: str) -> str:
+    def planet_sign(self, planet_name: str | None) -> str:
         return _get(self.planet(planet_name), "sign", "")
 
-    def in_house(self, planet_name: str, house_num: int) -> bool:
+    def in_house(self, planet_name: str | None, house_num: int) -> bool:
         return self.planet_house(planet_name) == house_num
 
     def planets_in_house(self, house_num: int) -> list[str]:
@@ -101,13 +109,38 @@ class RuleContext:
     def house_aspected_by_malefic(self, house_num: int) -> bool:
         return self.house_aspected_by(house_num, NATURAL_MALEFICS)
 
-    def has_ithasala(self, planet_a: str | None, planet_b: str | None) -> bool:
-        if not planet_a or not planet_b:
+    def planet_aspects_house(self, planet_name: str | None, house_num: int) -> bool:
+        planet = self.planet(planet_name)
+        if not planet:
             return False
+        for aspect in _get(planet, "aspects", []):
+            if int(_get(aspect, "target_house", -1)) == house_num:
+                return True
+        return False
+
+    def planet_aspects_planet(self, planet_name: str | None, target_name: str | None) -> bool:
+        planet = self.planet(planet_name)
+        if not planet or not target_name:
+            return False
+        for aspect in _get(planet, "aspects", []):
+            if target_name in (_get(aspect, "aspected_planets", []) or []):
+                return True
+        return False
+
+    def has_ithasala(self, planet_a: str | None, planet_b: str | None) -> bool:
+        return self.get_ithasala(planet_a, planet_b) is not None
+
+    def get_ithasala(self, planet_a: str | None, planet_b: str | None) -> dict | None:
+        if not planet_a or not planet_b:
+            return None
         pair = frozenset({planet_a, planet_b})
-        return any(
-            frozenset({item.get("faster_planet"), item.get("slower_planet")}) == pair
-            for item in self.yogas.get("ithasala", [])
+        return next(
+            (
+                item
+                for item in self.yogas.get("ithasala", [])
+                if frozenset({item.get("faster_planet"), item.get("slower_planet")}) == pair
+            ),
+            None,
         )
 
     def has_easarapha(self, planet_a: str | None, planet_b: str | None) -> bool:
@@ -123,7 +156,63 @@ class RuleContext:
         if not planet_a or not planet_b:
             return False
         pair = frozenset({planet_a, planet_b})
-        return any(frozenset(item.get("ithasala_pair", [])) == pair for item in self.yogas.get("kamboola", []))
+        return any(
+            frozenset(item.get("ithasala_pair", [])) == pair
+            for item in self.yogas.get("kamboola", [])
+        )
+
+    def same_house(self, planet_a: str | None, planet_b: str | None) -> bool:
+        house_a = self.planet_house(planet_a)
+        house_b = self.planet_house(planet_b)
+        return house_a != -1 and house_a == house_b
+
+    def has_link(self, planet_a: str | None, planet_b: str | None) -> bool:
+        return (
+            self.has_ithasala(planet_a, planet_b)
+            or self.same_house(planet_a, planet_b)
+            or self.planet_aspects_planet(planet_a, planet_b)
+            or self.planet_aspects_planet(planet_b, planet_a)
+        )
+
+    def house_is_supported(self, house_num: int, house_lord: str | None) -> bool:
+        return (
+            self.in_house(house_lord, house_num)
+            or self.planet_aspects_house(house_lord, house_num)
+            or self.house_aspected_by_benefic(house_num)
+            or any(p in NATURAL_BENEFICS for p in self.planets_in_house(house_num))
+        )
+
+    def house_is_afflicted(self, house_num: int, house_lord: str | None) -> bool:
+        return (
+            self.house_aspected_by_malefic(house_num)
+            or any(p in NATURAL_MALEFICS for p in self.planets_in_house(house_num))
+            or self.planet_is_afflicted(house_lord)
+        )
+
+    def planet_is_afflicted(self, planet_name: str | None) -> bool:
+        if not planet_name:
+            return False
+        if _get(self.planet(planet_name), "is_combust", False):
+            return True
+        house_num = self.planet_house(planet_name)
+        if house_num == -1:
+            return False
+        occupants = [name for name in self.planets_in_house(house_num) if name != planet_name]
+        return any(name in NATURAL_MALEFICS for name in occupants) or self.house_aspected_by_malefic(house_num)
+
+    def slower_house_from_ithasala(self, planet_a: str | None, planet_b: str | None) -> int | None:
+        inst = self.get_ithasala(planet_a, planet_b)
+        if not inst:
+            return None
+        return self.planet_house(inst.get("slower_planet"))
+
+    def derived_house(self, base_house: int, offset_house: int) -> int:
+        return ((base_house - 1) + (offset_house - 1)) % 12 + 1
+
+    def add_factor(self, factors: list[str], sources: list[str], text: str, source: str) -> None:
+        factors.append(text)
+        if source not in sources:
+            sources.append(source)
 
 
 RULE_HANDLERS: dict[int, callable] = {}
@@ -140,472 +229,454 @@ def register_house_rule(house_num: int):
 @register_house_rule(2)
 def rule_house_2(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord2 = ctx.house_lord(2)
-    gain_indicated = False
-    risk_flag = False
 
-    if ctx.has_ithasala(lord2, ctx.lagna_lord) or ctx.has_ithasala(lord2, "Moon"):
-        gain_indicated = True
-        factors.append("Lord of 2nd in applying aspect with Lagna lord - gain of money predicted")
+    lagna_link = ctx.has_ithasala(lord2, ctx.lagna_lord)
+    moon_link = ctx.has_ithasala(lord2, "Moon")
+    supported_house = ctx.house_is_supported(2, lord2)
+    afflicted_house = ctx.house_is_afflicted(2, lord2)
+    hostile_money = any(ctx.has_ithasala(lord2, malefic) for malefic in NATURAL_MALEFICS if malefic != "Moon")
+    separation = ctx.has_easarapha(lord2, ctx.lagna_lord)
 
-    h2_lord_house = ctx.planet_house(lord2) if lord2 else -1
-    if h2_lord_house != -1:
-        same_house = any(b in ctx.planets_in_house(h2_lord_house) for b in NATURAL_BENEFICS)
-        if same_house or ctx.house_aspected_by_benefic(h2_lord_house):
-            factors.append("Benefic influence on 2nd lord - financial gain")
-            gain_indicated = True
+    if lagna_link:
+        ctx.add_factor(
+            factors,
+            sources,
+            "2nd lord applies to the Lagna lord - gain is promised.",
+            "Finance: 2nd lord forms Ithasala with Lagna lord.",
+        )
+    if moon_link:
+        ctx.add_factor(
+            factors,
+            sources,
+            "2nd lord applies to the Moon - gain is supported by the flow of events.",
+            "Finance: 2nd lord forms Ithasala with Moon.",
+        )
+    if supported_house:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 2nd house or its lord receives benefic support.",
+            "General vitality: house prospers when its lord or benefics support it.",
+        )
+    if afflicted_house:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 2nd house or its lord is afflicted by malefic influence.",
+            "General vitality: house suffers when malefics join or aspect it.",
+        )
+    if hostile_money:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 2nd lord is drawn into harsh company, so gain is blemished by strain or anxiety.",
+            "Finance warning: severe affliction to the 2nd or its lord gives strain.",
+        )
+    if separation:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The significators are separating, so the promised gain recedes.",
+            "Easarapha: separation, missed opportunity, event moving away.",
+        )
 
-    if any(m in ctx.planets_in_house(2) for m in NATURAL_MALEFICS):
-        factors.append("Malefics in 2nd - gain possible but from distant land, with suffering")
+    source_house = ctx.slower_house_from_ithasala(ctx.lagna_lord, lord2)
+    if source_house:
+        ctx.add_factor(
+            factors,
+            sources,
+            f"The source of gain is shown through House {source_house}.",
+            "Finance: slower planet in the Lagna lord / 2nd lord link shows source of gain.",
+        )
 
-    if any(ctx.has_ithasala(lord2, malefic) for malefic in NATURAL_MALEFICS):
-        risk_flag = True
-        factors.append("Warning: 2nd lord applying to malefic - serious financial risk")
-
-    quad_trine = {1, 4, 5, 7, 9, 10}
-    ll_house = ctx.planet_house(ctx.lagna_lord) if ctx.lagna_lord else -1
-    moon_house = ctx.planet_house("Moon")
-    if ll_house in quad_trine and h2_lord_house in quad_trine and moon_house in quad_trine:
-        if (
-            (ctx.has_ithasala(ctx.lagna_lord, lord2) or ll_house == h2_lord_house)
-            and (ctx.has_ithasala(ctx.lagna_lord, "Moon") or ll_house == moon_house)
-            and (ctx.has_ithasala(lord2, "Moon") or h2_lord_house == moon_house)
-        ):
-            factors.append("Triple conjunction of wealth indicators - immediate gain certain")
-            gain_indicated = True
-
-    if moon_house in {4, 7} and ctx.in_house("Sun", 10):
-        if any(ctx.in_house(benefic, 1) for benefic in NATURAL_BENEFICS):
-            factors.append("Classical wealth yoga present - immediate financial gain")
-            gain_indicated = True
-
-    if gain_indicated and not risk_flag:
+    if separation and not lagna_link:
+        verdict = "NO - Gain slips away rather than coming to hand."
+    elif (lagna_link or moon_link) and supported_house and not afflicted_house:
         verdict = "YES - Dhana is promised; gain may come to hand."
-    elif gain_indicated and risk_flag:
-        verdict = "YES, WITH EFFORT - Dhana is promised, yet attended by toil or blemish."
-    elif risk_flag:
-        verdict = "NO - The indications show loss, anxiety, or obstruction in money matters."
+    elif (lagna_link or moon_link) and (afflicted_house or hostile_money):
+        verdict = "YES, WITH EFFORT - Dhana is promised, but strain, delay, or blemish attends it."
+    elif afflicted_house or hostile_money:
+        verdict = "NO - The chart shows anxiety, obstruction, or loss in money matters."
     else:
-        verdict = "NO - The chart does not clearly promise gain."
-    return RuleResult(verdict, factors)
+        verdict = "UNCLEAR - The chart does not give a firm promise of gain."
+
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(7)
 def rule_house_7(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord7 = ctx.house_lord(7)
     lord8 = ctx.house_lord(8)
-    lord3 = ctx.house_lord(3)
-    lord4 = ctx.house_lord(4)
 
-    r1 = ctx.has_ithasala(ctx.lagna_lord, lord7)
-    if r1:
-        factors.append("Applying aspect between Lagna lord and 7th lord - marriage will occur")
+    perfection = ctx.has_ithasala(ctx.lagna_lord, lord7)
+    moon_reinforces = ctx.has_kamboola(ctx.lagna_lord, lord7)
+    quick_union = ctx.in_house(lord7, 1) and ctx.has_link(lord7, ctx.lagna_lord)
+    delayed_union = (
+        ctx.has_link(lord7, ctx.lagna_lord)
+        and not quick_union
+        and not perfection
+    )
+    no_contact = not ctx.has_link(lord7, ctx.lagna_lord) and not ctx.planet_aspects_house(lord7, 1)
+    afflicted_union = ctx.house_is_afflicted(7, lord7) or ctx.has_link(lord7, lord8)
+    separation = ctx.has_easarapha(ctx.lagna_lord, lord7)
 
-    r2 = False
-    if ctx.in_house(ctx.lagna_lord, 7):
-        r2 = True
-        factors.append("Lagna lord in 7th - bride secured with effort")
-    elif ctx.in_house("Moon", 7):
-        r2 = True
-        factors.append("Moon in 7th - marriage will happen with some seeking")
+    if perfection:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord and 7th lord apply to perfection.",
+            "Ithasala: agreement, union, event happening.",
+        )
+    if moon_reinforces:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Moon reinforces the perfection by Kamboola.",
+            "Kamboola: Moon sharply improves the promise of fulfilment.",
+        )
+    if quick_union:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The significator is brought to Lagna and joins the querent's agency; the union is quicker.",
+            "Immediate vs delayed success: significator in Lagna and linked to Lagna lord gives quicker success.",
+        )
+    elif delayed_union:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The significator reaches the querent from another sign; the union is delayed.",
+            "Immediate vs delayed success: aspect from another sign gives delayed success.",
+        )
+    if no_contact:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The significator neither aspects Lagna nor joins the Lagna lord.",
+            "Immediate vs delayed success: if significator does not aspect Lagna or Lagna lord, the object is not fulfilled.",
+        )
+    if afflicted_union:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 7th house or its lord is afflicted, so the union is obstructed.",
+            "General vitality plus marriage warning: affliction to the 7th impedes union.",
+        )
+    if separation:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The marriage significators are separating rather than joining.",
+            "Easarapha: separation or event moving away.",
+        )
 
-    r3 = ctx.has_easarapha(ctx.lagna_lord, "Moon")
-    if r3:
-        factors.append("Lagna lord in Musaripha with Moon - past romantic connection indicated")
-
-    r4 = False
-    l7_house = ctx.planet_house(lord7) if lord7 else -1
-    if l7_house != -1:
-        for conjoined in ctx.planets_in_house(l7_house):
-            if conjoined != lord7:
-                planet = ctx.planet(conjoined)
-                if _get(planet, "is_combust", False) or ctx.house_aspected_by_malefic(l7_house):
-                    r4 = True
-                    break
-    if r4:
-        factors.append("Warning: 7th lord afflicted - obstacles in marriage")
-
-    r5 = False
-    if lord8 in NATURAL_MALEFICS:
-        p8 = ctx.planet(lord8)
-        if p8:
-            r5 = any(int(_get(asp, "target_house", -1)) == 7 for asp in _get(p8, "aspects", []))
-    if r5:
-        factors.append("Warning: 8th lord afflicts 7th - marriage may be blocked or delayed")
-
-    r6 = lord3 in NATURAL_MALEFICS
-    if r6:
-        factors.append("Brothers may cause obstruction to marriage")
-
-    r7 = lord4 in NATURAL_MALEFICS
-    if r7:
-        factors.append("Father figure may cause obstruction to marriage")
-
-    r8 = ctx.has_kamboola(ctx.lagna_lord, lord7)
-    if r8:
-        factors.append("Kamboola Yoga - marriage is strongly indicated and will be auspicious")
-
-    if r1 or r8:
+    if perfection and moon_reinforces and not afflicted_union:
         verdict = "YES - Union is promised."
-    elif r2 and not (r4 or r5):
-        verdict = "YES, WITH EFFORT - Union may be obtained, though only after effort and seeking."
-    elif r4 or r5:
+    elif perfection and afflicted_union:
+        verdict = "YES, WITH EFFORT - Union is possible, but not without obstacle or delay."
+    elif quick_union and not afflicted_union:
+        verdict = "YES - Union is promised and may come quickly."
+    elif delayed_union and not afflicted_union:
+        verdict = "YES, WITH EFFORT - Union may be obtained, though after delay or seeking."
+    elif separation or no_contact or afflicted_union:
         verdict = "NO - Obstructions prevail against union at present."
     else:
         verdict = "UNCLEAR - The combinations do not permit a firm judgment on union."
-    return RuleResult(verdict, factors)
+
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(6)
 def rule_house_6(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord6 = ctx.house_lord(6)
     lord8 = ctx.house_lord(8)
+    lord12 = ctx.house_lord(12)
 
-    r1 = ctx.in_house(lord6, 1) and ctx.in_house(lord8, 1)
-    if r1:
-        factors.append("CRITICAL: Lords of 6th and 8th in Lagna - life is threatened")
+    recovery_power = not ctx.planet_is_afflicted(ctx.lagna_lord) and not ctx.planet_is_afflicted("Moon")
+    disease_supported = ctx.house_is_supported(6, lord6)
+    disease_afflicted = ctx.house_is_afflicted(6, lord6)
+    danger_heavy = ctx.has_link(ctx.lagna_lord, lord8) or ctx.has_link(ctx.lagna_lord, lord12) or ctx.house_is_afflicted(8, lord8)
+    lagna_falls_to_dusthana = any(ctx.has_link(ctx.lagna_lord, lord) for lord in (lord6, lord8, lord12) if lord)
+    separating_from_recovery = ctx.has_easarapha(ctx.lagna_lord, lord6)
 
-    r2 = ctx.in_house(lord6, 8) and ctx.in_house(lord8, 6)
-    if r2:
-        factors.append("Lords of 6th and 8th in mutual exchange - speedy recovery indicated")
-
-    r3 = ctx.in_house(ctx.lagna_lord, 6) and ctx.in_house(lord6, 1)
-    if r3:
-        factors.append("Exchange of Lagna and 6th lords - long suffering, slow recovery")
-
-    r4 = ctx.has_ithasala(ctx.lagna_lord, lord6)
-    if r4:
-        factors.append("Lagna lord applying to 6th lord - illness will continue until aspect is exact")
-
-    r5 = any(ctx.in_house(benefic, 6) for benefic in NATURAL_BENEFICS)
-    if r5:
-        factors.append("Benefics in 6th - speedy recovery expected")
-
-    r6 = ctx.house_aspected_by_malefic(6) and ctx.house_aspected_by_malefic(8)
-    if r6:
-        factors.append("Warning: Malefics afflict both 6th and 8th - recovery unlikely")
-
-    r7 = ctx.planet_house(ctx.lagna_lord) in {1, 5, 9} and ctx.house_aspected_by_benefic(9)
-    if r7:
-        factors.append("Lagna lord in trine with benefic 9th - recovery after treatment")
+    if recovery_power:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord and Moon retain recovery power.",
+            "Health: 1st shows constitution and recovery power.",
+        )
+    else:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord or Moon is afflicted, weakening recovery.",
+            "Health warning: heavy affliction to Lagna or Moon impairs recovery.",
+        )
+    if disease_supported:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 6th house and its lord are clearly active.",
+            "Health: 6th shows the disease itself.",
+        )
+    if danger_heavy:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 8th or 12th joins the disease pattern, increasing danger and depletion.",
+            "Health: 8th shows danger, 12th shows loss and vital depletion.",
+        )
+    if lagna_falls_to_dusthana:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The Lagna lord is drawn into the 6th, 8th, or 12th pattern.",
+            "Health warning: Lagna lord tied to 6th, 8th, or 12th lord.",
+        )
+    if separating_from_recovery:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Recovery indicators separate rather than perfect.",
+            "Health warning: Easarapha from recovery indicators shows failure or delay.",
+        )
 
     lagna_type = SIGN_TYPES.get(ctx.planet_sign("Ascendant"), "")
     if lagna_type == "Movable":
-        factors.append("Movable Lagna - illness will be short")
+        ctx.add_factor(factors, sources, "Movable Lagna - the disease is of shorter course.", "Timing by sign nature.")
     elif lagna_type == "Fixed":
-        factors.append("Fixed Lagna - illness may be prolonged")
+        ctx.add_factor(factors, sources, "Fixed Lagna - the disease is prolonged.", "Timing by sign nature.")
     elif lagna_type == "Common":
-        factors.append("Common Lagna - illness of medium duration")
+        ctx.add_factor(factors, sources, "Common Lagna - the disease is of middle course.", "Timing by sign nature.")
 
-    if r1:
-        verdict = "CRITICAL - The chart shows grave danger to life and severe affliction."
-    elif r6:
-        verdict = "NO - The disease is severe and recovery is doubtful."
-    elif r2 or r5:
+    if danger_heavy and not recovery_power:
+        verdict = "CRITICAL - The chart shows grave affliction and danger."
+    elif separating_from_recovery or (lagna_falls_to_dusthana and danger_heavy):
+        verdict = "NO - The affliction persists and recovery is doubtful."
+    elif recovery_power and disease_afflicted and not danger_heavy:
         verdict = "YES - Recovery is promised."
-    elif r3 or r4:
-        verdict = "NO - The affliction persists and recovery is delayed."
-    elif r7:
+    elif recovery_power and disease_supported:
         verdict = "YES, WITH EFFORT - Relief may come, though by treatment and time."
     else:
         verdict = "UNCLEAR - The combinations do not permit a firm judgment on recovery."
-    return RuleResult(verdict, factors)
+
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(10)
 def rule_house_10(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord10 = ctx.house_lord(10)
 
-    r1 = ctx.has_ithasala(ctx.lagna_lord, lord10)
-    if r1:
-        factors.append("Applying aspect between Lagna lord and 10th lord - career success indicated")
+    perfection = ctx.has_ithasala(ctx.lagna_lord, lord10)
+    separation = ctx.has_easarapha(ctx.lagna_lord, lord10)
+    supported_work = ctx.house_is_supported(10, lord10)
+    afflicted_work = ctx.house_is_afflicted(10, lord10)
+    angular_lord = ctx.planet_house(lord10) in {1, 4, 7, 10}
+    moon_support = ctx.has_link("Moon", lord10) or ctx.has_link("Moon", ctx.lagna_lord)
 
-    r2 = ctx.planet_house(lord10) in {1, 4, 7, 10}
-    if r2:
-        factors.append("10th lord in angular house - strong career position")
+    if perfection:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord and 10th lord apply to perfection.",
+            "Main judgment factors: Lagna lord and significator mutually connect.",
+        )
+    if angular_lord:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 10th lord stands in an angle, strengthening station and authority.",
+            "House meanings and general vitality: strong 10th favors authority and profession.",
+        )
+    if supported_work:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 10th house or its lord receives benefic support.",
+            "General vitality: house prospers when lord or benefics support it.",
+        )
+    if afflicted_work:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 10th house or its lord is afflicted, so work is burdened.",
+            "General vitality: house suffers when malefics join or aspect it.",
+        )
+    if moon_support:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Moon joins the career pattern and helps the matter move.",
+            "Main judgment factors: Moon connecting to the combination strengthens fulfilment.",
+        )
+    if separation:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The work significators separate rather than perfect.",
+            "Easarapha: missed opportunity or event moving away.",
+        )
 
-    r3 = ctx.house_aspected_by_benefic(10)
-    if r3:
-        factors.append("Benefic aspect on 10th - professional recognition coming")
-
-    r4 = any(m in ctx.planets_in_house(10) for m in NATURAL_MALEFICS)
-    if r4:
-        factors.append("Malefics in 10th - career obstacles, effort required")
-
-    lagna_planet = ctx.planet(ctx.lagna_lord)
-    r5 = _get(lagna_planet, "speed_deg_per_day", 0.0) < 0 and ctx.has_ithasala(ctx.lagna_lord, lord10)
-    if r5:
-        factors.append("Retrograde Lagna lord applying to 10th lord - job change or reversal likely")
-
-    ll_house = ctx.planet_house(ctx.lagna_lord)
-    r6 = ll_house in {1, 4, 7, 10} and not ctx.has_ithasala(ctx.lagna_lord, ctx.house_lord(6)) and not ctx.has_ithasala(ctx.lagna_lord, ctx.house_lord(12))
-    if r6:
-        factors.append("Stable employment - no change of master indicated")
-
-    r7 = ctx.has_easarapha(lord10, ctx.lagna_lord)
-    if r7:
-        factors.append("Separating aspect - opportunity may have passed")
-
-    if r1 and not r4:
+    if perfection and supported_work and not afflicted_work:
         verdict = "YES - Advancement in work and station is promised."
-    elif r1 and r4:
+    elif perfection and afflicted_work:
         verdict = "YES, WITH EFFORT - Advancement is possible, but only after obstruction and labour."
-    elif r5:
-        verdict = "YES, WITH EFFORT - Change in work is indicated more than settlement in the present post."
-    elif r6:
-        verdict = "YES - The present station appears stable."
-    elif r7:
+    elif separation:
         verdict = "NO - The present undertaking appears to have slipped away."
+    elif supported_work and angular_lord and not afflicted_work:
+        verdict = "YES, WITH EFFORT - The station is supported, but full perfection is not yet shown."
+    elif afflicted_work:
+        verdict = "NO - Obstruction weighs on the matter of work and station."
     else:
         verdict = "UNCLEAR - The indications for work and station are mixed."
-    return RuleResult(verdict, factors)
+
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(3)
 def rule_house_3(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord3 = ctx.house_lord(3)
-    lord6 = ctx.house_lord(6)
 
-    p3 = ctx.planet(lord3)
-    lord3_aspects_3 = any(int(_get(asp, "target_house", -1)) == 3 for asp in _get(p3, "aspects", [])) if p3 else False
-    r1 = lord3_aspects_3 or ctx.house_aspected_by_benefic(3)
-    if r1:
-        factors.append("Brothers/sisters are well and happy")
-
-    r2 = _get(p3, "is_combust", False)
-    if r2:
-        factors.append("Brother faces danger or serious difficulty")
-
-    r3 = ctx.planet_house(lord3) == 6 and ctx.has_ithasala(lord3, lord6)
-    if r3:
-        factors.append("Brother is ill or in trouble")
-
-    l3_house = ctx.planet_house(lord3)
-    l3_afflicted = l3_house != -1 and (
-        any(m in ctx.planets_in_house(l3_house) for m in NATURAL_MALEFICS) or ctx.house_aspected_by_malefic(l3_house)
-    )
-    r4 = l3_house == 8 and l3_afflicted
-    if r4:
-        factors.append("Brother's life may be in danger")
-
-    r5 = any(m in ctx.planets_in_house(3) for m in NATURAL_MALEFICS)
-    if r5:
-        factors.append("Discord between querent and siblings")
-
-    r6 = ctx.has_ithasala(lord3, ctx.lagna_lord)
-    if r6:
-        factors.append("Communication or message will be received favourably")
-
-    r7 = ctx.has_easarapha(lord3, ctx.lagna_lord)
-    if r7:
-        factors.append("Message or communication has already gone unfavourably")
-
-    if r1 and r6:
+    if ctx.house_is_supported(3, lord3):
+        ctx.add_factor(factors, sources, "The 3rd house receives support.", "General vitality applied to the 3rd.")
+    if ctx.house_is_afflicted(3, lord3):
+        ctx.add_factor(factors, sources, "The 3rd house is afflicted.", "General vitality applied to the 3rd.")
+    if ctx.has_ithasala(lord3, ctx.lagna_lord):
+        ctx.add_factor(factors, sources, "The 3rd lord applies to the Lagna lord.", "Messages and brethren prosper when linked to the querent.")
         verdict = "YES - The matter of brethren and messages appears favourable."
-    elif r2 or r4:
-        verdict = "NO - The brother or sister faces grave affliction."
-    elif r3:
-        verdict = "YES, WITH EFFORT - There is affliction, but not beyond remedy."
-    elif r5 and not r1:
-        verdict = "NO - Discord is shown in the matter of brethren."
-    elif r7:
+    elif ctx.has_easarapha(lord3, ctx.lagna_lord):
+        ctx.add_factor(factors, sources, "The 3rd lord separates from the Lagna lord.", "Easarapha applied to the 3rd.")
         verdict = "NO - The message or communication does not prosper."
+    elif ctx.house_is_afflicted(3, lord3):
+        verdict = "NO - Discord or affliction is shown in the matter of brethren."
+    elif ctx.house_is_supported(3, lord3):
+        verdict = "YES, WITH EFFORT - The matter is supported, though not fully perfected."
     else:
         verdict = "UNCLEAR - The combinations do not give a firm judgment on brethren."
-    return RuleResult(verdict, factors)
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(4)
 def rule_house_4(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord4 = ctx.house_lord(4)
+    seller_house = 7
+    price_house = 10
 
-    r1 = ctx.in_house("Moon", 4) and ctx.has_ithasala(ctx.lagna_lord, "Moon")
-    if r1:
-        factors.append("Querent will acquire land or property")
+    buyer_property_link = ctx.has_ithasala(ctx.lagna_lord, lord4)
+    supported_property = ctx.house_is_supported(4, lord4)
+    afflicted_property = ctx.house_is_afflicted(4, lord4)
+    seller_active = ctx.house_is_supported(seller_house, ctx.house_lord(seller_house))
+    price_heavy = ctx.house_is_afflicted(price_house, ctx.house_lord(price_house))
 
-    r2 = ctx.has_ithasala(lord4, ctx.lagna_lord)
-    if r2:
-        factors.append("Property matter will be resolved favourably")
+    if buyer_property_link:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord and 4th lord are joined by applying connection.",
+            "Property: buyer and property prosper when Lagna lord and 4th lord connect strongly.",
+        )
+    if supported_property:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 4th house and its lord receive benefic support.",
+            "Property: benefics supporting the 4th favor acquisition.",
+        )
+    if afflicted_property:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 4th house or its lord is afflicted.",
+            "Property: malefic affliction to the 4th gives regret or obstruction.",
+        )
+    if seller_active:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The seller's side is active in the matter.",
+            "Property: 7th shows the seller.",
+        )
+    if price_heavy:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The practical result or price is burdened.",
+            "Property: 10th shows price/value or practical result.",
+        )
 
-    r3 = any(m in ctx.planets_in_house(4) for m in NATURAL_MALEFICS)
-    if r3:
-        factors.append("No benefit from property even if acquired. Mother may suffer.")
-
-    l4_house = ctx.planet_house(lord4)
-    r4 = l4_house in {6, 8}
-    if r4:
-        factors.append("Property matter faces serious obstacles")
-
-    r5 = ctx.house_aspected_by_benefic(4)
-    if r5:
-        factors.append("Property acquisition is favoured")
-
-    pmars = ctx.planet("Mars")
-    p4 = ctx.planet(lord4)
-    r6 = False
-    if pmars and p4:
-        if ctx.in_house("Mars", l4_house) and l4_house != -1:
-            r6 = True
-        elif ctx.has_ithasala("Mars", lord4):
-            r6 = True
-        else:
-            for asp in _get(pmars, "aspects", []):
-                if lord4 in _get(asp, "aspected_planets", []):
-                    r6 = True
-                    break
-                if int(_get(asp, "target_house", -1)) == l4_house and l4_house != -1:
-                    r6 = True
-    if r6:
-        factors.append("Do not purchase vehicle or property now")
-
-    if r2:
-        factors.append("Property purchase recommended")
-
-    if r1 or r2:
+    if buyer_property_link and supported_property and not afflicted_property:
         verdict = "YES - Acquisition of land or property is promised."
-    elif r2 and r5:
-        verdict = "YES - The property matter tends toward settlement."
-    elif r3 and not r2:
-        verdict = "NO - Even if acquired, the property does not yield benefit."
-    elif r4:
+    elif buyer_property_link and afflicted_property:
+        verdict = "YES, WITH EFFORT - The property matter tends toward settlement, but not without defect."
+    elif afflicted_property or price_heavy:
         verdict = "NO - Strong obstruction stands in the property matter."
-    elif r6:
-        verdict = "NO - This is not a favourable time for vehicle or property purchase."
     else:
         verdict = "UNCLEAR - The property indications are mixed."
-    return RuleResult(verdict, factors)
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(5)
 def rule_house_5(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord5 = ctx.house_lord(5)
-    p5 = ctx.planet(lord5)
+    fulfilment_help = ctx.house_lord(11)
 
-    r1 = ctx.has_ithasala(lord5, ctx.lagna_lord) or ctx.has_ithasala(lord5, "Moon")
-    if r1:
-        factors.append("Children/education matter will succeed")
+    if ctx.has_ithasala(ctx.lagna_lord, lord5):
+        ctx.add_factor(factors, sources, "Lagna lord and 5th lord apply to perfection.", "Children: Ithasala between Lagna lord and 5th lord is good.")
+    if ctx.has_link(lord5, "Moon"):
+        ctx.add_factor(factors, sources, "Moon joins the matter of children or learning.", "Children: use 5th house, 5th lord, Moon, and Lagna lord.")
+    if ctx.has_link(lord5, fulfilment_help):
+        ctx.add_factor(factors, sources, "The 11th lord helps fulfilment of the matter.", "Children: support from the 11th lord helps fulfilment.")
+    if ctx.house_is_afflicted(5, lord5):
+        ctx.add_factor(factors, sources, "The 5th house or its lord is afflicted.", "Children: affliction blocks or delays the matter.")
 
-    lord5_aspects_1 = any(int(_get(asp, "target_house", -1)) == 1 for asp in _get(p5, "aspects", [])) if p5 else False
-    r2 = not ctx.has_ithasala(ctx.lagna_lord, lord5) and not lord5_aspects_1
-    if r2:
-        factors.append("No children indicated - no mutual connection")
-
-    r3 = any(ctx.has_ithasala(lord5, malefic) for malefic in NATURAL_MALEFICS)
-    if r3:
-        factors.append("Children matter is blocked or delayed by malefic influence")
-
-    asc_sign = ctx.planet_sign("Ascendant")
-    house5_sign = ZODIAC[(ZODIAC.index(asc_sign) + 4) % 12] if asc_sign in ZODIAC else ""
-    r4 = house5_sign in {"Leo", "Taurus", "Scorpio", "Virgo"} and ctx.house_aspected_by_malefic(5)
-    if r4:
-        factors.append("Very few or no children indicated")
-
-    r5 = any(b in ctx.planets_in_house(5) for b in NATURAL_BENEFICS) or ctx.house_aspected_by_benefic(5)
-    if r5:
-        factors.append("Children/education success strongly indicated")
-
-    r6 = ctx.has_ithasala(ctx.lagna_lord, lord5) and ctx.has_ithasala(ctx.lagna_lord, "Moon") and ctx.has_ithasala(lord5, "Moon")
-    if r6:
-        factors.append("Triple confirmation - children or exam success certain")
-
-    r7 = _get(p5, "is_combust", False)
-    if r7:
-        factors.append("Children matter delayed due to weak significator")
-
-    if r6:
-        verdict = "YES - Children or learning are strongly promised."
-    elif r1 and r5:
-        verdict = "YES - The indications favour children or learning."
-    elif r1 and not r3:
-        verdict = "YES, WITH EFFORT - Success may come, though after delay or effort."
-    elif r2 or r3:
-        verdict = "NO - The desired issue is not supported by the chart."
-    elif r4:
-        verdict = "NO - Strong obstruction to children is shown."
-    elif r7:
-        verdict = "YES, WITH EFFORT - The matter is delayed, yet not denied."
+    if ctx.has_ithasala(ctx.lagna_lord, lord5) and not ctx.house_is_afflicted(5, lord5):
+        verdict = "YES - Children or learning are promised."
+    elif ctx.has_ithasala(ctx.lagna_lord, lord5):
+        verdict = "YES, WITH EFFORT - The matter may succeed, though after delay or effort."
+    elif ctx.house_is_afflicted(5, lord5):
+        verdict = "NO - Strong obstruction is shown in the matter of children or learning."
     else:
         verdict = "UNCLEAR - The combinations do not permit a firm judgment on children or learning."
-    return RuleResult(verdict, factors)
+    return RuleResult(verdict, factors, sources)
 
 
 @register_house_rule(9)
 def rule_house_9(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
+    sources: list[str] = []
     lord9 = ctx.house_lord(9)
-    ll_house = ctx.planet_house(ctx.lagna_lord)
 
-    r1 = ll_house in {1, 4, 7, 10} and ctx.has_ithasala(ctx.lagna_lord, lord9)
-    if r1:
-        factors.append("Journey will be undertaken")
+    if ctx.has_ithasala(ctx.lagna_lord, lord9):
+        ctx.add_factor(factors, sources, "Lagna lord and 9th lord move toward perfection.", "Travel: connection of querent and journey lord supports travel.")
+    if ctx.house_is_afflicted(9, lord9):
+        ctx.add_factor(factors, sources, "The 9th house or its lord is afflicted.", "Travel: affliction impedes the journey.")
+    if ctx.planet_house("Saturn") in {8, 9} and ctx.house_is_afflicted(9, lord9):
+        ctx.add_factor(factors, sources, "Danger or illness may attend the journey.", "Travel warning: heavy affliction around 8th/9th gives danger abroad.")
 
-    p9 = ctx.planet(lord9)
-    l9_house = ctx.planet_house(lord9)
-    has_trine_aspect = any(int(_get(asp, "target_house", -1)) in {5, 9} for asp in _get(p9, "aspects", [])) if p9 else False
-    base_r23 = l9_house == 1 and ctx.has_ithasala(lord9, ctx.lagna_lord)
-    r2 = base_r23 and not has_trine_aspect
-    r3 = base_r23 and has_trine_aspect
-    if r2:
-        factors.append("Journey will NOT take place")
-    if r3:
-        factors.append("Journey will be undertaken despite initial doubt")
-
-    r4 = False
-    if ll_house in {1, 4, 7, 10}:
-        has_ith_3 = any(ctx.has_ithasala(ctx.lagna_lord, p3) for p3 in ctx.planets_in_house(3))
-        malefic_aspects_ll = any(
-            any(int(_get(asp, "target_house", -1)) == ll_house for asp in _get(ctx.planet(malefic), "aspects", []))
-            for malefic in NATURAL_MALEFICS
-            if ctx.planet(malefic)
-        )
-        if has_ith_3 and not malefic_aspects_ll:
-            r4 = True
-    if r4:
-        factors.append("Short journey will occur")
-
-    r5 = any(m in ctx.planets_in_house(house) for house in {1, 4, 7, 10} for m in NATURAL_MALEFICS)
-    if r5:
-        factors.append("Journey will not take place")
-
-    r6 = ctx.planet_house("Jupiter") in {2, 3} and ctx.planet_house("Venus") in {2, 3}
-    if r6:
-        factors.append("Traveller will return soon")
-
-    l9_type = SIGN_TYPES.get(ctx.planet_sign(lord9), "")
-    if l9_type == "Movable":
-        factors.append("Quick journey and return")
-    elif l9_type == "Fixed":
-        factors.append("Long absence")
-    elif l9_type == "Common":
-        factors.append("Change of route, visiting multiple places")
-
-    sat_house = ctx.planet_house("Saturn")
-    r8 = sat_house in {8, 9} and (
-        any(m in ctx.planets_in_house(sat_house) and m != "Saturn" for m in NATURAL_MALEFICS)
-        or ctx.house_aspected_by_malefic(sat_house)
-    )
-    if r8:
-        factors.append("Traveller will fall ill or face serious danger abroad")
-
-    if r1 and not r5:
+    if ctx.has_ithasala(ctx.lagna_lord, lord9) and not ctx.house_is_afflicted(9, lord9):
         verdict = "YES - The journey is promised."
-    elif r3:
-        verdict = "YES, WITH EFFORT - The journey may take place, though not without hindrance."
-    elif r4:
-        verdict = "YES - A short journey is indicated."
-    elif r2 or r5:
+    elif ctx.has_ithasala(ctx.lagna_lord, lord9):
+        verdict = "YES, WITH EFFORT - Travel is possible, but danger or hindrance attends it."
+    elif ctx.has_easarapha(ctx.lagna_lord, lord9) or ctx.house_is_afflicted(9, lord9):
         verdict = "NO - The journey does not appear to proceed."
-    elif r8:
-        verdict = "YES, WITH EFFORT - Travel is possible, but danger or affliction attends it."
     else:
         verdict = "UNCLEAR - The combinations do not permit a firm judgment on travel."
-    return RuleResult(verdict, factors)
+    return RuleResult(verdict, factors, sources)
 
 
 def apply_house_rules(query_house: int, positions: dict, house_lords: dict, precomputed_yogas: dict, house_judgment: dict) -> dict:
@@ -621,6 +692,7 @@ def apply_house_rules(query_house: int, positions: dict, house_lords: dict, prec
     if not handler:
         result = RuleResult(
             "General house judgment applied. House-specific rules are only configured for target areas.",
+            [],
             [],
         )
     else:
@@ -643,4 +715,5 @@ def apply_house_rules(query_house: int, positions: dict, house_lords: dict, prec
     return {
         "specific_verdict": specific_verdict,
         "specific_factors": result.specific_factors,
+        "source_rules": result.source_rules,
     }

@@ -406,6 +406,7 @@ def render_answer_block(res: dict) -> None:
 
     specific_verdict = judg.get("specific_verdict", "")
     specific_factors = judg.get("specific_factors", [])
+    source_rules = judg.get("source_rules", [])
     query_time_meaning = judg.get("query_time_meaning", "")
     interpretation = judg.get("interpretation", "Consult a scholar.")
     primary_timing = tim.get("most_likely", {})
@@ -450,6 +451,10 @@ def render_answer_block(res: dict) -> None:
         st.markdown("<h5 style='color: #E2E2E2; margin-top: 15px;'>Classical Factors</h5>", unsafe_allow_html=True)
         for factor in specific_factors:
             st.markdown(f"- <span style='color:rgba(232,223,200,0.85);'>{factor}</span>", unsafe_allow_html=True)
+    if source_rules:
+        st.markdown("<h5 style='color: #E2E2E2; margin-top: 15px;'>Book Basis</h5>", unsafe_allow_html=True)
+        for source in source_rules:
+            st.markdown(f"- <span style='color:rgba(232,223,200,0.72);'>{source}</span>", unsafe_allow_html=True)
 
     if query_time_meaning:
         st.markdown(
