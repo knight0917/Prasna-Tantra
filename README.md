@@ -1,15 +1,39 @@
-# AstroTrack Python
+# Prasna Tantra
 
-A high-performance computational engine to generate planetary degrees, Zodiac signs, and Nakshatras using precise ephemeris data (NASA JPL DE421 via `skyfield`).
+A Python project for Prasna (horary) astrology built around:
 
-## Requirements
+- a Skyfield-based planetary engine
+- Prasna Tantra-inspired house judgment rules
+- Tajaka yoga detection
+- sincerity and timing helpers
+- a Streamlit UI and Python callable API
 
-- Python 3.10+
-- 20MB free RAM (for Ephemeris caching)
+## What It Does
 
-## 1. Setup Environment
+Given a query time and place, the app computes:
 
-First, create a virtual environment and install the required calculation bounds:
+- Ascendant and planetary positions
+- whole-sign houses
+- Vedic aspects
+- planetary avasthas
+- Tajaka yogas such as `Ithasala`, `Easarapha`, `Nakta`, `Yamaya`, and `Kamboola`
+- house-specific horary judgment for common topics like marriage, wealth, children, illness, career, property, travel, and loss
+- a basic timing estimate
+
+## Project Layout
+
+- `app.py`: Streamlit app
+- `src/engine.py`: astronomical engine
+- `src/main.py`: orchestration entrypoints
+- `src/query_engine.py`: public high-level API
+- `src/house_judgment.py`: core horary judgment
+- `src/house_rules.py`: topic-specific rules
+- `src/tajaka_yogas.py`: Tajaka yoga detection
+- `src/timing.py`: timing estimation
+- `src/sincerity_check.py`: sincerity rules
+- `src/question_parser.py`: simple NLP topic parser
+
+## Setup
 
 ```powershell
 python -m venv venv
@@ -17,45 +41,70 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-## 2. Running The Engine Benchmark
+If `de421.bsp` is not already in the project root, the Streamlit app will download it on first run.
 
-We have provisioned a direct internal benchmark that asserts the mathematical constraints and the $< 100ms$ validation limits requested in the PRD.
+## Run
 
-Run the module explicitly from the root folder:
+CLI:
 
 ```powershell
-python -m src.main
+python -m src.main --prasna
 ```
 
-### Expected Output
+Streamlit UI:
 
-The system will initialize the `de421.bsp` (a 17MB astronomical database downloaded dynamically on your very first run) explicitly into RAM, and then spit out the precise planetary dictionary including the 9 celestial bodies + the exact execution time.
+```powershell
+streamlit run app.py
+```
 
-## 3. Integrating with Other Frontends
+Or use the helper batch file:
 
-The core class `AstroEngine` expects a pure dictionary injected into the `process_astro_request` wrapper. You can wrap `process_astro_request()` directly into a `FastAPI` route like so:
+```powershell
+.\run.bat
+.\run.bat --ui
+```
+
+## Python Usage
 
 ```python
-from src.main import process_astro_request
+from src.query_engine import run_prasna_query_from_coords
 
-payload = {
-    "datetime": {
-        "year": 2026,
-        "month": 2,
-        "day": 22,
-        "hour": 10,
-        "minute": 0,
-        "second": 0,
-        "utc_offset": 5.5
-    },
-    "location": {
-        "latitude": 28.6139,
-        "longitude": 77.2090,
-        "altitude": 200.0
-    },
-    "ayanamsa": "LAHIRI" # Or "TROPICAL", "RAMAN"
-}
+result = run_prasna_query_from_coords(
+    28.6139,
+    77.2090,
+    "2026-02-22",
+    "10:00:00",
+    "marriage",
+)
 
-# The dictionary response is instantly JSON serializable!
-dict_json = process_astro_request(payload)
+print(result["summary"])
 ```
+
+## Supported Topics
+
+- `wealth`
+- `marriage`
+- `children`
+- `illness`
+- `career`
+- `property`
+- `siblings`
+- `longevity`
+- `father`
+- `travel`
+- `legal`
+- `loss`
+
+## Tests
+
+Run the lightweight smoke tests with:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+## Notes
+
+- This project mixes classical horary rules with pragmatic engineering choices.
+- Timing rules in Prasna texts are interpretive and should be treated as approximate.
+- The current implementation uses a simplified whole-sign approach for house lordship and aspect handling.

@@ -7,7 +7,6 @@ from .tajaka_yogas import detect_tajaka_yogas
 from .house_judgment import judge_house
 from .sincerity_check import check_sincerity
 from .timing import estimate_timing
-from decimal import Decimal
 
 # ---------------------------------------------------------------------------
 # Vedic House Lord Lookup Tables (module-level constants, no runtime cost)
@@ -330,7 +329,7 @@ if __name__ == "__main__":
 
     print("\n── SINCERITY CHECK ──────────────────")
     mark = '✓' if sinc.get('sincere') else '✗'
-    print(f"{mark} {sinc.get('recommendation')}")
+    print(f"{mark} {sinc.get('message')}")
     print(f"Matched rules: {sinc.get('matched_sincere_rules')} / Insincere: {sinc.get('matched_insincere_rules')}")
 
     print("\n── PLANET STATES (AVASTHAS) ─────────")
@@ -379,7 +378,7 @@ if __name__ == "__main__":
         print(f"Method 2 (Nakshatra) : {tim['method_2']['value']} {tim['method_2']['unit']}")
         print(f"Method 3 (Signs)     : {tim['method_3']['value']} {tim['method_3']['unit']}")
         print(f"Most Likely          : {tim['most_likely']['value']} {tim['most_likely']['unit']}")
-        print(f"Note: {res.get('timing_note', tim.get('description', ''))}")
+        print(f"Note: {tim.get('timing_note', '')}")
 
     print("\n── SUMMARY ──────────────────────────")
     print(res["summary"])

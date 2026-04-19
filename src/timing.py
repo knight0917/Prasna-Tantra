@@ -42,9 +42,13 @@ _NAKSHATRAS: list[str] = [
     "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni",
     "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha",
     "Jyeshtha", "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana",
-    "Dhanishtha", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada",
+    "Dhanishta", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada",
     "Revati",
 ]
+
+_NAKSHATRA_ALIASES: dict[str, str] = {
+    "Dhanishtha": "Dhanishta",
+}
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -61,6 +65,8 @@ def _nakshatra_gap(nak_a: str, nak_b: str) -> int:
     Shortest arc count between two nakshatras out of 27.
     Returns integer in [0, 13].
     """
+    nak_a = _NAKSHATRA_ALIASES.get(nak_a, nak_a)
+    nak_b = _NAKSHATRA_ALIASES.get(nak_b, nak_b)
     idx_a = _NAKSHATRAS.index(nak_a)
     idx_b = _NAKSHATRAS.index(nak_b)
     diff = abs(idx_b - idx_a)
@@ -127,6 +133,9 @@ def estimate_timing(
         m1_desc = f"{orb}° to exact aspect → {orb} months (Fixed lagna)."
 
     # ── Method 2: Nakshatra method ────────────────────────────────────────
+    lagna_lord_nakshatra = _NAKSHATRA_ALIASES.get(lagna_lord_nakshatra, lagna_lord_nakshatra)
+    karyesh_nakshatra = _NAKSHATRA_ALIASES.get(karyesh_nakshatra, karyesh_nakshatra)
+
     if lagna_lord_nakshatra not in _NAKSHATRAS:
         raise ValueError(f"Unknown nakshatra: '{lagna_lord_nakshatra}'")
     if karyesh_nakshatra not in _NAKSHATRAS:
