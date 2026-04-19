@@ -324,18 +324,18 @@ def _build_judgment(
     Compose the horary verdict from Prasna Tantra principles.
     """
     if ithasala_present and karyasiddhi >= 75:
-        text = "YES — The query will be fulfilled."
+        text = "YES - The query is strongly supported and can be fulfilled."
     elif ithasala_present and karyasiddhi >= 50:
-        text = "YES, WITH EFFORT — Fulfilment requires persistence."
+        text = "YES, WITH EFFORT - Fulfilment is possible, but not without obstacles."
     elif easarapha_present and not ithasala_present:
-        text = "NO — The opportunity has passed."
+        text = "NO - A separating pattern is present, so the matter appears to be moving away."
     elif karyasiddhi <= 25:
-        text = "NO — Conditions are not favourable for this query."
+        text = "NO - Conditions are not favourable for this query."
     else:
-        text = "UNCLEAR — No applying aspect between significators."
+        text = "UNCLEAR - No applying aspect perfects the matter at present."
 
     if kamboola_present:
-        text += " Kamboola yoga strengthens the result considerably."
+        text += " Kamboola further strengthens the promise."
 
     return text
 
@@ -391,10 +391,6 @@ def judge_house(
     lagna_result = _analyze_lagna(positions, lagna_lord, benefics, malefics)
     karyasiddhi_percent = lagna_result["karyasiddhi_percent"]
     
-    if sirshodaya_bonus:
-        karyasiddhi_percent = min(100, karyasiddhi_percent + 10)
-    else:
-        karyasiddhi_percent = max(25, karyasiddhi_percent - 5)
 
     # ── Step 4: Query house vitality ──────────────────────────────────────
     query_result = _analyze_query_house(
@@ -421,8 +417,6 @@ def judge_house(
             )
             
     moon_supports_meaning = "Moon sign lord strongly supports the query house — additional strength." if moon_supports_query else ""
-    if moon_supports_query:
-        karyasiddhi_percent = min(100, karyasiddhi_percent + 10)
 
     # ── NEW CHECK 2: Waxing/Waning Moon ───────────────────────────────────
     sun_data = positions.get("Sun")
@@ -564,6 +558,8 @@ def judge_house(
         "lagna_lord_aspects_lagna":     lagna_result["lagna_lord_aspects_lagna"],
         "benefic_aspects_lagna":        lagna_result["benefic_aspects_lagna"],
         "moon_unafflicted":             lagna_result["moon_unafflicted"],
+        "benefic_in_lagna":             lagna_result["benefic_in_lagna"],
+        "benefic_aspects_lagna_lord":   lagna_result["benefic_aspects_lagna_lord"],
         "benefics_in_10th":             lagna_result["benefics_in_10th"],
 
         # Step 4 — Query house

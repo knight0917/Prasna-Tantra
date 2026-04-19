@@ -2,7 +2,7 @@ import re
 
 HOUSE_KEYWORDS = {
     10: ('career',   r'job|career|profession|work|office|boss|promotion|salary|business|employ|interview|recruit|infosys|company|resign|retire|transfer'),
-    7:  ('marriage', r'marriage|marry|wife|husband|spouse|partner|relationship|wedding|bride|groom|divorce|separate|love|girlfriend|boyfriend|engagement'),
+    7:  ('marriage', r'marriage|marry|married|wife|husband|spouse|partner|relationship|wedding|bride|groom|divorce|separate|love|girlfriend|boyfriend|engagement'),
     5:  ('children', r'child|son|daughter|baby|pregnant|pregnancy|birth|kid|deliver|conceive|exam|study|education|college|admission|iit|school|result'),
     6:  ('illness',  r'sick|illness|disease|health|hospital|doctor|recover|cure|medicine|surgery|pain|fever|cancer|treatment|diagnos|infection|operation'),
     4:  ('property', r'house|property|flat|land|home|plot|apartment|mother|vehicle|car|bike|buy|purchase|construct|rent|lease|bungalow'),
