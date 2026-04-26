@@ -390,6 +390,79 @@ def rule_house_7(ctx: RuleContext) -> RuleResult:
     return RuleResult(verdict, factors, sources)
 
 
+@register_house_rule(8)
+def rule_house_8(ctx: RuleContext) -> RuleResult:
+    factors: list[str] = []
+    sources: list[str] = []
+    lord8 = ctx.house_lord(8)
+    lord2 = ctx.house_lord(2)
+
+    lagna_to_8th = ctx.has_link(ctx.lagna_lord, lord8)
+    moon_to_8th = ctx.has_link("Moon", lord8) or ctx.in_house("Moon", 8)
+    eighth_supported = ctx.house_is_supported(8, lord8)
+    eighth_afflicted = ctx.house_is_afflicted(8, lord8)
+    wealth_recovery_link = ctx.has_link(lord2, lord8)
+    separation = ctx.has_easarapha(ctx.lagna_lord, lord8)
+
+    if lagna_to_8th:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord is tied to the 8th lord, bringing fear, danger, or hidden trouble into the matter.",
+            "House 8: fear, danger, chronic trouble, hidden matters, lost property.",
+        )
+    if moon_to_8th:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Moon joins the 8th-house pattern, disturbing the flow of the matter.",
+            "Moon: mind, flow of events, and support or disturbance to combinations.",
+        )
+    if eighth_supported:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 8th house receives benefic or lordly support, reducing complete denial.",
+            "General vitality: a house prospers when its own lord or benefics support it.",
+        )
+    if eighth_afflicted:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 8th house or its lord is afflicted, increasing danger, fear, or concealment.",
+            "General vitality: a house suffers when malefics join or aspect it.",
+        )
+    if wealth_recovery_link:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 2nd lord links with the 8th, showing valuables or loss/recovery concerns.",
+            "House meanings: 2nd shows valuables; 8th shows hidden or lost property.",
+        )
+    if separation:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The significators separate from the 8th pattern rather than perfecting it.",
+            "Easarapha: separation, missed opportunity, or event moving away.",
+        )
+
+    if eighth_afflicted and lagna_to_8th and moon_to_8th:
+        verdict = "CRITICAL - Danger, fear, or severe hidden affliction is strongly shown."
+    elif eighth_afflicted and (lagna_to_8th or moon_to_8th):
+        verdict = "NO - The 8th-house matter is afflicted and does not prosper."
+    elif separation:
+        verdict = "NO - The hidden or dangerous matter recedes rather than resolving."
+    elif eighth_supported and wealth_recovery_link:
+        verdict = "YES, WITH EFFORT - Recovery or disclosure is possible, but only through difficulty."
+    elif eighth_supported and not eighth_afflicted:
+        verdict = "UNCLEAR - The 8th house is supported, but the matter remains hidden or uncertain."
+    else:
+        verdict = "UNCLEAR - The 8th-house indications do not permit a firm judgment."
+
+    return RuleResult(verdict, factors, sources)
+
+
 @register_house_rule(6)
 def rule_house_6(ctx: RuleContext) -> RuleResult:
     factors: list[str] = []
@@ -538,6 +611,132 @@ def rule_house_10(ctx: RuleContext) -> RuleResult:
         verdict = "NO - Obstruction weighs on the matter of work and station."
     else:
         verdict = "UNCLEAR - The indications for work and station are mixed."
+
+    return RuleResult(verdict, factors, sources)
+
+
+@register_house_rule(11)
+def rule_house_11(ctx: RuleContext) -> RuleResult:
+    factors: list[str] = []
+    sources: list[str] = []
+    lord11 = ctx.house_lord(11)
+
+    perfection = ctx.has_ithasala(ctx.lagna_lord, lord11)
+    moon_support = ctx.has_link("Moon", lord11) or ctx.in_house("Moon", 11)
+    eleventh_supported = ctx.house_is_supported(11, lord11)
+    eleventh_afflicted = ctx.house_is_afflicted(11, lord11)
+    separation = ctx.has_easarapha(ctx.lagna_lord, lord11)
+
+    if perfection:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord and 11th lord apply to perfection, favoring gain or fulfilment.",
+            "House 11: gain, fulfillment, profit, and network support.",
+        )
+    if moon_support:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Moon supports the 11th-house matter, helping the desire move forward.",
+            "Main judgment factors: Moon connecting to the combination strengthens fulfilment.",
+        )
+    if eleventh_supported:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 11th house or its lord receives benefic support.",
+            "General vitality: a house prospers when its lord or benefics support it.",
+        )
+    if eleventh_afflicted:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 11th house or its lord is afflicted, blemishing gain or friendship.",
+            "General vitality: a house suffers when malefics join or aspect it.",
+        )
+    if separation:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The gain significators separate rather than perfect.",
+            "Easarapha: missed opportunity or event moving away.",
+        )
+
+    if perfection and eleventh_supported and not eleventh_afflicted:
+        verdict = "YES - Gain and fulfilment are promised."
+    elif perfection and eleventh_afflicted:
+        verdict = "YES, WITH EFFORT - Gain is possible, but obstruction or blemish attends it."
+    elif separation:
+        verdict = "NO - The gain or desired fulfilment appears to move away."
+    elif eleventh_supported and moon_support and not eleventh_afflicted:
+        verdict = "YES, WITH EFFORT - The desire is supported, though full perfection is not yet shown."
+    elif eleventh_afflicted:
+        verdict = "NO - Gain, friendship, or fulfilment is obstructed."
+    else:
+        verdict = "UNCLEAR - The combinations do not give a firm judgment on gain."
+
+    return RuleResult(verdict, factors, sources)
+
+
+@register_house_rule(12)
+def rule_house_12(ctx: RuleContext) -> RuleResult:
+    factors: list[str] = []
+    sources: list[str] = []
+    lord12 = ctx.house_lord(12)
+
+    lagna_to_12th = ctx.has_link(ctx.lagna_lord, lord12)
+    moon_to_12th = ctx.has_link("Moon", lord12) or ctx.in_house("Moon", 12)
+    twelfth_supported = ctx.house_is_supported(12, lord12)
+    twelfth_afflicted = ctx.house_is_afflicted(12, lord12)
+    separation = ctx.has_easarapha(ctx.lagna_lord, lord12)
+
+    if lagna_to_12th:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Lagna lord is linked with the 12th lord, drawing the querent toward loss, expense, foreignness, or withdrawal.",
+            "House 12: loss, expense, renunciation, enjoyment, isolation.",
+        )
+    if moon_to_12th:
+        ctx.add_factor(
+            factors,
+            sources,
+            "Moon joins the 12th-house pattern, making the loss or withdrawal more active.",
+            "Moon: mind and flow of events.",
+        )
+    if twelfth_supported:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 12th house receives support, favoring foreign, spiritual, or withdrawal matters.",
+            "General vitality applied to the 12th house.",
+        )
+    if twelfth_afflicted:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 12th house is afflicted, showing waste, expense, confinement, or drain.",
+            "House 12: loss and expense; malefic affliction worsens the matter.",
+        )
+    if separation:
+        ctx.add_factor(
+            factors,
+            sources,
+            "The 12th-house significators separate rather than perfect.",
+            "Easarapha: separation or event moving away.",
+        )
+
+    if twelfth_afflicted and (lagna_to_12th or moon_to_12th):
+        verdict = "NO - Loss, expense, or confinement weighs strongly on the matter."
+    elif lagna_to_12th and twelfth_supported and not twelfth_afflicted:
+        verdict = "YES, WITH EFFORT - Foreign, withdrawal, or expense-related matters may proceed, but with cost."
+    elif separation:
+        verdict = "NO - The 12th-house matter recedes rather than completing."
+    elif twelfth_supported and not twelfth_afflicted:
+        verdict = "UNCLEAR - The 12th house is supported, but the final result is not fully shown."
+    else:
+        verdict = "UNCLEAR - The combinations do not give a firm judgment on loss or foreign matters."
 
     return RuleResult(verdict, factors, sources)
 

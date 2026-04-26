@@ -1,7 +1,11 @@
 import unittest
+from unittest.mock import patch
+
+import requests
 
 from src.main import process_astro_request
 from src.house_rules import RULE_HANDLERS, apply_house_rules
+from src.groq_question_parser import _apply_common_derived_house_correction, _sanitize_result, parse_question_with_groq
 from src.question_parser import parse_question
 from src.query_engine import run_prasna_query_from_coords
 from src.tajaka_yogas import detect_tajaka_yogas
@@ -33,6 +37,92 @@ class SmokeTests(unittest.TestCase):
         parsed = parse_question("what now")
         self.assertTrue(parsed.get("needs_clarification"))
         self.assertEqual(parsed["confidence"], "low")
+
+    def test_groq_parser_sanitizes_derived_house_result(self):
+        parsed = _sanitize_result(
+            {
+                "query_house": 2,
+                "query_topic": "career",
+                "confidence": "high",
+                "needs_clarification": False,
+                "rephrased": "Will my child get a job?",
+                "reasoning": "Child is 5th; profession is 10th from 5th.",
+                "derived_house_used": True,
+                "base_house": 5,
+                "derived_from": "10th from 5th = 2nd house.",
+            },
+            "Will my child get a job?",
+        )
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["query_house"], 2)
+        self.assertTrue(parsed["derived_house_used"])
+
+    def test_groq_parser_corrects_common_derived_house_result(self):
+        parsed = _sanitize_result(
+            {
+                "query_house": 10,
+                "query_topic": "career",
+                "confidence": "high",
+                "needs_clarification": False,
+                "rephrased": "Will my child get a job?",
+                "reasoning": "Natural career house.",
+                "derived_house_used": False,
+            },
+            "Will my child get a job?",
+        )
+        corrected = _apply_common_derived_house_correction(parsed, "Will my child get a job?")
+        self.assertEqual(corrected["query_house"], 2)
+        self.assertEqual(corrected["query_topic"], "career")
+        self.assertTrue(corrected["derived_house_used"])
+
+    def test_groq_parser_corrects_brother_marriage_derivation(self):
+        parsed = _sanitize_result(
+            {
+                "query_house": 7,
+                "query_topic": "marriage",
+                "confidence": "high",
+                "needs_clarification": False,
+                "rephrased": "Will my brother get married?",
+                "reasoning": "Natural marriage house.",
+                "derived_house_used": False,
+            },
+            "Will my brother get married?",
+        )
+        corrected = _apply_common_derived_house_correction(parsed, "Will my brother get married?")
+        self.assertEqual(corrected["query_house"], 9)
+        self.assertEqual(corrected["query_topic"], "marriage")
+        self.assertTrue(corrected["derived_house_used"])
+
+    def test_groq_parser_corrects_more_book_derived_examples(self):
+        examples = [
+            ("What about my mother's longevity?", 11, "longevity"),
+            ("Will my spouse get money?", 8, "wealth"),
+            ("Will my child get married?", 11, "marriage"),
+            ("Will my father recover his health?", 2, "illness"),
+            ("Will my friend's lost article be found?", 12, "wealth"),
+        ]
+        for question, house, topic in examples:
+            parsed = _sanitize_result(
+                {
+                    "query_house": 1,
+                    "query_topic": topic,
+                    "confidence": "high",
+                    "needs_clarification": False,
+                    "rephrased": question,
+                    "reasoning": "Needs derived houses.",
+                    "derived_house_used": False,
+                },
+                question,
+            )
+            corrected = _apply_common_derived_house_correction(parsed, question)
+            self.assertEqual(corrected["query_house"], house, question)
+            self.assertEqual(corrected["query_topic"], topic, question)
+            self.assertTrue(corrected["derived_house_used"], question)
+
+    def test_groq_parser_returns_none_when_api_fails(self):
+        with patch("src.groq_question_parser.requests.post", side_effect=requests.RequestException("network down")):
+            parsed = parse_question_with_groq("Will I get married?", api_key="test-key")
+        self.assertIsNone(parsed)
 
     def test_process_astro_request_returns_core_sections(self):
         result = process_astro_request(PAYLOAD, query_house=7)
@@ -71,7 +161,7 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(result["query_house"], 7)
 
     def test_house_rule_registry_contains_supported_handlers(self):
-        for house in [2, 3, 4, 5, 6, 7, 9, 10]:
+        for house in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]:
             self.assertIn(house, RULE_HANDLERS)
 
     def test_apply_house_rules_returns_structured_output(self):
@@ -93,6 +183,14 @@ class SmokeTests(unittest.TestCase):
         result = process_astro_request(PAYLOAD, query_house=7)
         self.assertIn("source_rules", result["house_judgment"])
         self.assertIsInstance(result["house_judgment"]["source_rules"], list)
+
+    def test_new_house_rules_return_book_basis(self):
+        for house in [8, 11, 12]:
+            result = process_astro_request(PAYLOAD, query_house=house)
+            judgment = result["house_judgment"]
+            self.assertIn("specific_verdict", judgment)
+            self.assertIn("source_rules", judgment)
+            self.assertIsInstance(judgment["source_rules"], list)
 
     def test_timing_is_withheld_when_no_perfection_exists(self):
         result = process_astro_request(PAYLOAD, query_house=7)

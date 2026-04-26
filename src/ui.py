@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime
 
-import pandas as pd
 import streamlit as st
 
 
@@ -26,30 +25,6 @@ p, div, label, span {
     font-size: 1.1rem;
 }
 
-.streamlit-expanderHeader {
-    font-family: 'Cinzel', serif !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.2em !important;
-    color: #C9A84C !important;
-    background: transparent !important;
-    padding: 0.8rem 0 !important;
-}
-
-.streamlit-expanderHeader p {
-    font-size: 0.75rem !important;
-    margin: 0 !important;
-    line-height: 1 !important;
-}
-
-.streamlit-expanderContent {
-    border-left: 1px solid rgba(201,168,76,0.15) !important;
-    padding-left: 1rem !important;
-}
-
-div[data-testid='stExpander'] div {
-    font-size: unset;
-}
-
 .stTextInput input, .stSelectbox select, .stDateInput input, .stNumberInput input, .stTextArea textarea {
     background: rgba(201,168,76,0.05) !important;
     border: 1px solid rgba(201,168,76,0.25) !important;
@@ -65,31 +40,6 @@ label {
     font-size: 0.65rem !important;
     letter-spacing: 0.15em !important;
     text-transform: uppercase;
-}
-
-.stTabs [data-baseweb="tab-list"] {
-    gap: 2rem;
-    background-color: transparent;
-}
-
-.stTabs [data-baseweb="tab"] {
-    height: 50px;
-    white-space: pre-wrap;
-    background-color: transparent;
-    border-radius: 4px 4px 0 0;
-    gap: 1px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    color: rgba(232, 223, 200, 0.5);
-    font-family: 'Cinzel', serif;
-    font-size: 0.8rem;
-    letter-spacing: 0.1em;
-}
-
-.stTabs [aria-selected="true"] {
-    background-color: rgba(201, 168, 76, 0.05);
-    color: #C9A84C !important;
-    border-bottom: 2px solid #C9A84C !important;
 }
 
 .stButton > button {
@@ -110,28 +60,6 @@ label {
 .stButton > button:hover {
     background: linear-gradient(135deg, #E8C96A, #C9A84C) !important;
     box-shadow: 0 0 20px rgba(201,168,76,0.4) !important;
-}
-
-div[data-testid='stMetric'] {
-    background: rgba(201,168,76,0.05);
-    border: 1px solid rgba(201,168,76,0.2);
-    border-radius: 2px;
-    padding: 1rem 1.5rem;
-    text-align: center;
-}
-
-div[data-testid='stMetricLabel'] p {
-    font-family: 'Cinzel', serif !important;
-    font-size: 0.6rem !important;
-    letter-spacing: 0.2em !important;
-    color: rgba(201,168,76,0.6) !important;
-    text-transform: uppercase;
-}
-
-div[data-testid='stMetricValue'] {
-    font-family: 'Cinzel', serif !important;
-    color: #C9A84C !important;
-    font-size: 1.8rem !important;
 }
 
 .sec-header {
@@ -165,35 +93,6 @@ def configure_page() -> None:
 def init_session_state() -> None:
     if "last_result" not in st.session_state:
         st.session_state.last_result = None
-    if "nlp_parsed" not in st.session_state:
-        st.session_state.nlp_parsed = None
-    if "show_details" not in st.session_state:
-        st.session_state["show_details"] = False
-
-
-def _relevant_tajaka_items(res: dict, key: str) -> list[dict]:
-    judg = res.get("house_judgment", {})
-    yogas = res.get("yogas", {})
-    lagna_lord = judg.get("lagna_lord")
-    karyesh = judg.get("karyesh")
-    relevant_pair = {lagna_lord, karyesh}
-
-    items = yogas.get(key, [])
-    filtered: list[dict] = []
-    for item in items:
-        if key in {"ithasala", "easarapha"}:
-            pair = {item.get("faster_planet"), item.get("slower_planet")}
-            if pair == relevant_pair:
-                filtered.append(item)
-        elif key in {"naktha", "yamaya"}:
-            pair = set(item.get("planet_pair", (None, None)))
-            if pair == relevant_pair:
-                filtered.append(item)
-        elif key == "kamboola":
-            pair = set(item.get("ithasala_pair", (None, None)))
-            if pair == relevant_pair:
-                filtered.append(item)
-    return filtered
 
 
 def _perfection_label(judg: dict) -> str:
@@ -384,6 +283,7 @@ def render_parsed_question_box(parsed: dict) -> None:
                 <b>House concerned:</b> House {parsed.get('query_house', '?')} -
                 <span style='color:#C9A84C;'>{reasoning_intro}</span>
             </div>
+            {f"<div style='font-family:Crimson Text,serif; font-size:0.95rem; color:rgba(232,223,200,0.68); margin-top:0.3rem;'><b>Derived house:</b> {parsed.get('derived_from')}</div>" if parsed.get('derived_house_used') and parsed.get('derived_from') else ""}
         </div>
         """,
         unsafe_allow_html=True,
@@ -467,97 +367,3 @@ def render_answer_block(res: dict) -> None:
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div style="height:1.5rem"></div>', unsafe_allow_html=True)
-    col_btn = st.columns([1, 2, 1])
-    with col_btn[1]:
-        btn_label = "HIDE ASTROLOGICAL DETAILS" if st.session_state["show_details"] else "VIEW ASTROLOGICAL DETAILS"
-        if st.button(btn_label, key="toggle_details"):
-            st.session_state["show_details"] = not st.session_state["show_details"]
-            st.rerun()
-
-    if st.session_state["show_details"]:
-        render_details_panel(res)
-
-
-
-def render_details_panel(res: dict) -> None:
-    judg = res.get("house_judgment", {})
-    avas = res.get("avasthas", {})
-    tim = res.get("timing_estimate", {})
-    positions = res.get("positions", {})
-    karyesh_name = judg.get("karyesh", "Unknown")
-    karyesh = positions.get(karyesh_name, {})
-
-    st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
-    section_header("Reading Basis")
-    m_l1, m_l2, m_l3 = st.columns(3)
-    with m_l1:
-        st.metric("Lagna", f"{judg.get('lagna_sign', 'Unknown')} (House 1)")
-    with m_l2:
-        st.metric("Moon", "Unafflicted" if judg.get("moon_unafflicted") else "Afflicted")
-    with m_l3:
-        st.metric("Significator", f"{karyesh_name} / House {karyesh.get('house', '?')}")
-
-    lagna_factors = []
-    lagna_factors.append("Lagna lord aspects the Ascendant - favourable" if judg.get("lagna_lord_aspects_lagna") else "Lagna lord does not aspect the Ascendant - weakness")
-    lagna_factors.append("Benefic planet occupies the Ascendant - strong positive" if judg.get("benefic_in_lagna") else "A benefic planet aspects the Ascendant - strengthens query" if judg.get("benefic_aspects_lagna") else "No benefic aspects the Ascendant")
-    lagna_factors.append("Moon = seed, Lagna = flower, query house = outcome framework applied")
-    lagna_factors.append(f"Rising type: {judg.get('lagna_rise_type', 'unknown').capitalize()}")
-    if judg.get("moon_supports_query"):
-        lagna_factors.append("Moon supports the query significator - helpful secondary testimony")
-
-    for factor in lagna_factors:
-        color = "#4A7C59" if "no " not in factor.lower() and "weakness" not in factor.lower() and "afflicted" not in factor.lower() else "#8B3A3A"
-        st.markdown(f"<div style='color:{color};'>{factor}</div>", unsafe_allow_html=True)
-
-    st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-    section_header("Planet States")
-    if avas:
-        df_data = pd.DataFrame(
-            [{"Planet": p, "State": d.get("avastha", "").capitalize(), "Strength": d.get("strength", "").capitalize()} for p, d in avas.items()]
-        )
-        st.dataframe(df_data, hide_index=True, use_container_width=True)
-
-    st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-    section_header("Tajaka Yogas")
-    shown_any = False
-    for label, key in [("Applying (Ithasala)", "ithasala"), ("Separating (Easarapha)", "easarapha"), ("Translation (Nakta)", "naktha"), ("Translation (Yamaya)", "yamaya"), ("Moon Reinforcement (Kamboola)", "kamboola")]:
-        items = _relevant_tajaka_items(res, key)
-        if items:
-            shown_any = True
-            st.markdown(f"**{label}:**")
-            for item in items:
-                if key in {"ithasala", "easarapha"}:
-                    detail = f"- {item['faster_planet']} + {item['slower_planet']} ({item['aspect_type']})"
-                    if key == "ithasala" and item.get("aspect_quality") == "obstructed":
-                        detail += " - perfection with obstruction"
-                    if key == "ithasala" and item.get("aspect_quality") == "adverse":
-                        detail += " - hostile application"
-                    st.write(detail)
-                elif key in {"naktha", "yamaya"}:
-                    pair = item.get("planet_pair", ("?", "?"))
-                    st.write(f"- {pair[0]} + {pair[1]} via {item.get('mediator', '?')}")
-                else:
-                    pair = item.get("ithasala_pair", ("?", "?"))
-                    st.write(f"- {pair[0]} + {pair[1]} reinforced by Moon")
-    if not shown_any:
-        st.markdown(
-            "Only yogas directly bearing on the Lagna lord and significator are shown here. "
-            "No relevant direct or transferred perfection was found."
-        )
-
-    st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-    section_header("Timing Details")
-    if tim:
-        if tim.get("error"):
-            st.markdown(f"*Timing could not be resolved cleanly: {tim['error']}*")
-        else:
-            st.markdown("**Primary method:** degree gap plus sign quality")
-            st.markdown(f"**Calculated Time:** {tim.get('most_likely', {}).get('value', '?')} {tim.get('most_likely', {}).get('unit', '')}")
-            st.markdown(f"*{tim.get('timing_note', '')}*")
-            if tim.get("method_2") and tim.get("method_3"):
-                st.markdown(f"Secondary classical estimates: Method 2 = {tim['method_2']['value']} {tim['method_2']['unit']}, Method 3 = {tim['method_3']['value']} {tim['method_3']['unit']}")
-
-    st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-    section_header("Computational Summary")
-    st.markdown(f"<div style='font-style:italic;'>{res.get('summary', '')}</div>", unsafe_allow_html=True)

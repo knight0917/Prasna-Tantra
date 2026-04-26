@@ -3,6 +3,7 @@ import os
 import streamlit as st
 
 from src.query_engine import run_prasna_query, run_prasna_query_from_coords
+from src.groq_question_parser import groq_is_configured, parse_question_with_groq
 from src.question_parser import parse_question
 from src.ui import (
     configure_page,
@@ -59,7 +60,9 @@ def run_query(form_data: dict) -> None:
         return
 
     with st.spinner("Reading your question..."):
-        parsed = parse_question(user_question)
+        parsed = parse_question_with_groq(user_question) if groq_is_configured() else None
+        if parsed is None:
+            parsed = parse_question(user_question)
         if parsed.get("needs_clarification"):
             st.session_state["parsed_question"] = parsed
             st.session_state.last_result = None

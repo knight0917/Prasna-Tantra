@@ -3,6 +3,7 @@ venv/
 env/
 .env
 .venv/
+ENV/
 
 # Python Bytecodes & Cache
 __pycache__/
@@ -10,15 +11,24 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .mypy_cache/
+.ipynb_checkpoints/
 
 # Large Astronomical Ephemeris Files (DO NOT COMMIT)
+# These are heavy binary files that should be managed separately or downloaded on setup
 *.bsp
 de421.bsp
+sweph/
 
 # Build and Packaging
 build/
 dist/
 *.egg-info/
+*.spec
+
+# Streamlit & Web
+.streamlit/config.toml
+!.streamlit/secrets.toml.example
+.streamlit/secrets.toml
 
 # Tests & Temporary Runtime Output
 output.json
@@ -26,10 +36,20 @@ output_utf8.json
 houses_result.json
 test_output.txt
 *.log
+*.tmp
+debug.txt
+
+# Project specific notes/drafts that shouldn't be in main repo
+"New project 2/"
+PRASNA_TANTRA_PROJECT_AUDIT.md
+Prasna_Tantra_Notes.md
+*.md
+!README.md
 
 # IDE / OS specific configs
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
+*.swp
+*.swo

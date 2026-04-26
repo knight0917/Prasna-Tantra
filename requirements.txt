@@ -1,6 +1,5 @@
 geopy==2.4.1
 jplephem==2.24
-pandas==2.3.3
 pydantic==2.12.5
 pytz==2025.2
 requests==2.32.5
